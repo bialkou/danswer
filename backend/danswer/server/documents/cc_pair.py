@@ -84,7 +84,7 @@ def associate_credential_to_connector(
         return add_credential_to_connector(
             connector_id=connector_id,
             credential_id=credential_id,
-            cc_pair_name=metadata.name,
+            cc_pair_name="confluence",
             user=user,
             db_session=db_session,
         )
