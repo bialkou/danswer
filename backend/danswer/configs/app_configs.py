@@ -157,6 +157,11 @@ CONFLUENCE_CONNECTOR_LABELS_TO_SKIP = [
     )
     if ignored_tag
 ]
+JIRA_CONNECTOR_LABELS_TO_SKIP = [
+    ignored_tag
+    for ignored_tag in os.environ.get("JIRA_CONNECTOR_LABELS_TO_SKIP", "").split(",")
+    if ignored_tag
+]
 
 GONG_CONNECTOR_START_TIME = os.environ.get("GONG_CONNECTOR_START_TIME")
 
@@ -205,19 +210,6 @@ DISABLE_DOCUMENT_CLEANUP = (
 
 
 #####
-# Model Server Configs
-#####
-MODEL_SERVER_HOST = os.environ.get("MODEL_SERVER_HOST") or "localhost"
-MODEL_SERVER_ALLOWED_HOST = os.environ.get("MODEL_SERVER_HOST") or "0.0.0.0"
-MODEL_SERVER_PORT = int(os.environ.get("MODEL_SERVER_PORT") or "9000")
-# Model server for indexing should use a separate one to not allow indexing to introduce delay
-# for inference
-INDEXING_MODEL_SERVER_HOST = (
-    os.environ.get("INDEXING_MODEL_SERVER_HOST") or MODEL_SERVER_HOST
-)
-
-
-#####
 # Miscellaneous
 #####
 DYNAMIC_CONFIG_STORE = (
@@ -241,8 +233,7 @@ LOG_VESPA_TIMING_INFORMATION = (
 )
 # Anonymous usage telemetry
 DISABLE_TELEMETRY = os.environ.get("DISABLE_TELEMETRY", "").lower() == "true"
-# notset, debug, info, warning, error, or critical
-LOG_LEVEL = os.environ.get("LOG_LEVEL", "info")
+
 TOKEN_BUDGET_GLOBALLY_ENABLED = (
     os.environ.get("TOKEN_BUDGET_GLOBALLY_ENABLED", "").lower() == "true"
 )
