@@ -28,9 +28,9 @@ from danswer.llm.answering.answer import Answer
 from danswer.llm.answering.models import AnswerStyleConfig
 from danswer.llm.answering.models import CitationConfig
 from danswer.llm.answering.models import DocumentPruningConfig
-from danswer.llm.answering.models import LLMConfig
 from danswer.llm.answering.models import PromptConfig
 from danswer.llm.answering.models import QuotesConfig
+from danswer.llm.factory import get_llm_for_persona
 from danswer.llm.utils import get_default_llm_token_encode
 from danswer.one_shot_answer.models import DirectQARequest
 from danswer.one_shot_answer.models import OneShotQAResponse
@@ -77,6 +77,7 @@ def stream_answer_objects(
     timeout: int = QA_TIMEOUT,
     bypass_acl: bool = False,
     use_citations: bool = False,
+    danswerbot_flow: bool = False,
     retrieval_metrics_callback: Callable[[RetrievalMetricsContainer], None]
     | None = None,
     rerank_metrics_callback: Callable[[RerankMetricsContainer], None] | None = None,
@@ -98,6 +99,7 @@ def stream_answer_objects(
         user_id=user_id,
         persona_id=query_req.persona_id,
         one_shot=True,
+        danswerbot_flow=danswerbot_flow,
     )
 
     llm_tokenizer = get_default_llm_token_encode()
@@ -212,10 +214,9 @@ def stream_answer_objects(
         docs=[llm_doc_from_inference_section(section) for section in top_sections],
         answer_style_config=answer_config,
         prompt_config=PromptConfig.from_model(prompt),
-        llm_config=LLMConfig.from_persona(chat_session.persona),
+        llm=get_llm_for_persona(persona=chat_session.persona),
         doc_relevance_list=search_pipeline.section_relevance_list,
         single_message_history=history_str,
-        timeout=timeout,
     )
     yield from answer.processed_streamed_output
 
@@ -274,6 +275,7 @@ def get_search_answer(
     enable_reflexion: bool = False,
     bypass_acl: bool = False,
     use_citations: bool = False,
+    danswerbot_flow: bool = False,
     retrieval_metrics_callback: Callable[[RetrievalMetricsContainer], None]
     | None = None,
     rerank_metrics_callback: Callable[[RerankMetricsContainer], None] | None = None,
@@ -289,6 +291,7 @@ def get_search_answer(
         db_session=db_session,
         bypass_acl=bypass_acl,
         use_citations=use_citations,
+        danswerbot_flow=danswerbot_flow,
         timeout=answer_generation_timeout,
         retrieval_metrics_callback=retrieval_metrics_callback,
         rerank_metrics_callback=rerank_metrics_callback,

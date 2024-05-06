@@ -30,6 +30,7 @@ from danswer.db.models import SearchDoc as DBSearchDoc
 from danswer.db.models import StarterMessage
 from danswer.db.models import User
 from danswer.db.models import User__UserGroup
+from danswer.file_store.models import FileDescriptor
 from danswer.llm.override_models import LLMOverride
 from danswer.llm.override_models import PromptOverride
 from danswer.search.enums import RecencyBiasSetting
@@ -101,6 +102,7 @@ def create_chat_session(
     llm_override: LLMOverride | None = None,
     prompt_override: PromptOverride | None = None,
     one_shot: bool = False,
+    danswerbot_flow: bool = False,
 ) -> ChatSession:
     chat_session = ChatSession(
         user_id=user_id,
@@ -109,6 +111,7 @@ def create_chat_session(
         llm_override=llm_override,
         prompt_override=prompt_override,
         one_shot=one_shot,
+        danswerbot_flow=danswerbot_flow,
     )
 
     db_session.add(chat_session)
@@ -256,6 +259,7 @@ def create_new_chat_message(
     token_count: int,
     message_type: MessageType,
     db_session: Session,
+    files: list[FileDescriptor] | None = None,
     rephrased_query: str | None = None,
     error: str | None = None,
     reference_docs: list[DBSearchDoc] | None = None,
@@ -273,6 +277,7 @@ def create_new_chat_message(
         token_count=token_count,
         message_type=message_type,
         citations=citations,
+        files=files,
         error=error,
     )
 
@@ -498,6 +503,7 @@ def upsert_persona(
     recency_bias: RecencyBiasSetting,
     prompts: list[Prompt] | None,
     document_sets: list[DBDocumentSet] | None,
+    llm_model_provider_override: str | None,
     llm_model_version_override: str | None,
     starter_messages: list[StarterMessage] | None,
     is_public: bool,
@@ -524,6 +530,7 @@ def upsert_persona(
         persona.llm_filter_extraction = llm_filter_extraction
         persona.recency_bias = recency_bias
         persona.default_persona = default_persona
+        persona.llm_model_provider_override = llm_model_provider_override
         persona.llm_model_version_override = llm_model_version_override
         persona.starter_messages = starter_messages
         persona.deleted = False  # Un-delete if previously deleted
@@ -553,6 +560,7 @@ def upsert_persona(
             default_persona=default_persona,
             prompts=prompts or [],
             document_sets=document_sets or [],
+            llm_model_provider_override=llm_model_provider_override,
             llm_model_version_override=llm_model_version_override,
             starter_messages=starter_messages,
         )
@@ -816,6 +824,7 @@ def translate_db_message_to_chat_message_detail(
         message_type=chat_message.message_type,
         time_sent=chat_message.time_sent,
         citations=chat_message.citations,
+        files=chat_message.files or [],
     )
 
     return chat_msg_detail
