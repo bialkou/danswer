@@ -1,7 +1,7 @@
 import datetime
+import json
 from enum import Enum as PyEnum
 from typing import Any
-from typing import List
 from typing import Literal
 from typing import NotRequired
 from typing import Optional
@@ -24,14 +24,18 @@ from sqlalchemy import String
 from sqlalchemy import Text
 from sqlalchemy import UniqueConstraint
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.engine.interfaces import Dialect
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
 from sqlalchemy.orm import relationship
+from sqlalchemy.types import LargeBinary
+from sqlalchemy.types import TypeDecorator
 
 from danswer.auth.schemas import UserRole
 from danswer.configs.constants import DEFAULT_BOOST
 from danswer.configs.constants import DocumentSource
+from danswer.configs.constants import FileOrigin
 from danswer.configs.constants import MessageType
 from danswer.configs.constants import SearchFeedbackType
 from danswer.configs.constants import TokenRateLimitScope
@@ -47,10 +51,44 @@ from danswer.llm.override_models import LLMOverride
 from danswer.llm.override_models import PromptOverride
 from danswer.search.enums import RecencyBiasSetting
 from danswer.search.enums import SearchType
+from danswer.utils.encryption import decrypt_bytes_to_string
+from danswer.utils.encryption import encrypt_string_to_bytes
 
 
 class Base(DeclarativeBase):
     pass
+
+
+class EncryptedString(TypeDecorator):
+    impl = LargeBinary
+
+    def process_bind_param(self, value: str | None, dialect: Dialect) -> bytes | None:
+        if value is not None:
+            return encrypt_string_to_bytes(value)
+        return value
+
+    def process_result_value(self, value: bytes | None, dialect: Dialect) -> str | None:
+        if value is not None:
+            return decrypt_bytes_to_string(value)
+        return value
+
+
+class EncryptedJson(TypeDecorator):
+    impl = LargeBinary
+
+    def process_bind_param(self, value: dict | None, dialect: Dialect) -> bytes | None:
+        if value is not None:
+            json_str = json.dumps(value)
+            return encrypt_string_to_bytes(json_str)
+        return value
+
+    def process_result_value(
+        self, value: bytes | None, dialect: Dialect
+    ) -> dict | None:
+        if value is not None:
+            json_str = decrypt_bytes_to_string(value)
+            return json.loads(json_str)
+        return value
 
 
 """
@@ -64,24 +102,39 @@ class OAuthAccount(SQLAlchemyBaseOAuthAccountTableUUID, Base):
 
 
 class User(SQLAlchemyBaseUserTableUUID, Base):
-    oauth_accounts: Mapped[List[OAuthAccount]] = relationship(
+    oauth_accounts: Mapped[list[OAuthAccount]] = relationship(
         "OAuthAccount", lazy="joined"
     )
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole, native_enum=False, default=UserRole.BASIC)
     )
-    credentials: Mapped[List["Credential"]] = relationship(
+
+    """
+    Preferences probably should be in a separate table at some point, but for now
+    putting here for simpicity
+    """
+
+    # if specified, controls the assistants that are shown to the user + their order
+    # if not specified, all assistants are shown
+    chosen_assistants: Mapped[list[int]] = mapped_column(
+        postgresql.ARRAY(Integer), nullable=True
+    )
+
+    # relationships
+    credentials: Mapped[list["Credential"]] = relationship(
         "Credential", back_populates="user", lazy="joined"
     )
-    chat_sessions: Mapped[List["ChatSession"]] = relationship(
+    chat_sessions: Mapped[list["ChatSession"]] = relationship(
         "ChatSession", back_populates="user"
     )
-    chat_folders: Mapped[List["ChatFolder"]] = relationship(
+    chat_folders: Mapped[list["ChatFolder"]] = relationship(
         "ChatFolder", back_populates="user"
     )
-    prompts: Mapped[List["Prompt"]] = relationship("Prompt", back_populates="user")
+    prompts: Mapped[list["Prompt"]] = relationship("Prompt", back_populates="user")
     # Personas owned by this user
-    personas: Mapped[List["Persona"]] = relationship("Persona", back_populates="user")
+    personas: Mapped[list["Persona"]] = relationship("Persona", back_populates="user")
+    # Custom tools created by this user
+    custom_tools: Mapped[list["Tool"]] = relationship("Tool", back_populates="user")
 
 
 class AccessToken(SQLAlchemyBaseAccessTokenTableUUID, Base):
@@ -186,6 +239,13 @@ class Document__Tag(Base):
     tag_id: Mapped[int] = mapped_column(ForeignKey("tag.id"), primary_key=True)
 
 
+class Persona__Tool(Base):
+    __tablename__ = "persona__tool"
+
+    persona_id: Mapped[int] = mapped_column(ForeignKey("persona.id"), primary_key=True)
+    tool_id: Mapped[int] = mapped_column(ForeignKey("tool.id"), primary_key=True)
+
+
 """
 Documents/Indexing Tables
 """
@@ -225,9 +285,6 @@ class ConnectorCredentialPair(Base):
     last_successful_index_time: Mapped[datetime.datetime | None] = mapped_column(
         DateTime(timezone=True), default=None
     )
-    last_attempt_status: Mapped[IndexingStatus | None] = mapped_column(
-        Enum(IndexingStatus, native_enum=False)
-    )
     total_docs_indexed: Mapped[int] = mapped_column(Integer, default=0)
 
     connector: Mapped["Connector"] = relationship(
@@ -236,9 +293,13 @@ class ConnectorCredentialPair(Base):
     credential: Mapped["Credential"] = relationship(
         "Credential", back_populates="connectors"
     )
-    document_sets: Mapped[List["DocumentSet"]] = relationship(
+    document_sets: Mapped[list["DocumentSet"]] = relationship(
         "DocumentSet",
         secondary=DocumentSet__ConnectorCredentialPair.__table__,
+        primaryjoin=(
+            (DocumentSet__ConnectorCredentialPair.connector_credential_pair_id == id)
+            & (DocumentSet__ConnectorCredentialPair.is_current.is_(True))
+        ),
         back_populates="connector_credential_pairs",
         overlaps="document_set",
     )
@@ -271,13 +332,12 @@ class Document(Base):
     primary_owners: Mapped[list[str] | None] = mapped_column(
         postgresql.ARRAY(String), nullable=True
     )
-    # Something like assignee or space owner
     secondary_owners: Mapped[list[str] | None] = mapped_column(
         postgresql.ARRAY(String), nullable=True
     )
     # TODO if more sensitive data is added here for display, make sure to add user/group permission
 
-    retrieval_feedbacks: Mapped[List["DocumentRetrievalFeedback"]] = relationship(
+    retrieval_feedbacks: Mapped[list["DocumentRetrievalFeedback"]] = relationship(
         "DocumentRetrievalFeedback", back_populates="document"
     )
     tags = relationship(
@@ -323,6 +383,7 @@ class Connector(Base):
         postgresql.JSONB()
     )
     refresh_freq: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    prune_freq: Mapped[int | None] = mapped_column(Integer, nullable=True)
     time_created: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -331,15 +392,15 @@ class Connector(Base):
     )
     disabled: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    credentials: Mapped[List["ConnectorCredentialPair"]] = relationship(
+    credentials: Mapped[list["ConnectorCredentialPair"]] = relationship(
         "ConnectorCredentialPair",
         back_populates="connector",
         cascade="all, delete-orphan",
     )
     documents_by_connector: Mapped[
-        List["DocumentByConnectorCredentialPair"]
+        list["DocumentByConnectorCredentialPair"]
     ] = relationship("DocumentByConnectorCredentialPair", back_populates="connector")
-    index_attempts: Mapped[List["IndexAttempt"]] = relationship(
+    index_attempts: Mapped[list["IndexAttempt"]] = relationship(
         "IndexAttempt", back_populates="connector"
     )
 
@@ -348,7 +409,7 @@ class Credential(Base):
     __tablename__ = "credential"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    credential_json: Mapped[dict[str, Any]] = mapped_column(postgresql.JSONB())
+    credential_json: Mapped[dict[str, Any]] = mapped_column(EncryptedJson())
     user_id: Mapped[UUID | None] = mapped_column(ForeignKey("user.id"), nullable=True)
     # if `true`, then all Admins will have access to the credential
     admin_public: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -359,15 +420,15 @@ class Credential(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    connectors: Mapped[List["ConnectorCredentialPair"]] = relationship(
+    connectors: Mapped[list["ConnectorCredentialPair"]] = relationship(
         "ConnectorCredentialPair",
         back_populates="credential",
         cascade="all, delete-orphan",
     )
     documents_by_credential: Mapped[
-        List["DocumentByConnectorCredentialPair"]
+        list["DocumentByConnectorCredentialPair"]
     ] = relationship("DocumentByConnectorCredentialPair", back_populates="credential")
-    index_attempts: Mapped[List["IndexAttempt"]] = relationship(
+    index_attempts: Mapped[list["IndexAttempt"]] = relationship(
         "IndexAttempt", back_populates="credential"
     )
     user: Mapped[User | None] = relationship("User", back_populates="credentials")
@@ -387,7 +448,7 @@ class EmbeddingModel(Base):
     )
     index_name: Mapped[str] = mapped_column(String)
 
-    index_attempts: Mapped[List["IndexAttempt"]] = relationship(
+    index_attempts: Mapped[list["IndexAttempt"]] = relationship(
         "IndexAttempt", back_populates="embedding_model"
     )
 
@@ -559,6 +620,26 @@ class SearchDoc(Base):
     )
 
 
+class ToolCall(Base):
+    """Represents a single tool call"""
+
+    __tablename__ = "tool_call"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # not a FK because we want to be able to delete the tool without deleting
+    # this entry
+    tool_id: Mapped[int] = mapped_column(Integer())
+    tool_name: Mapped[str] = mapped_column(String())
+    tool_arguments: Mapped[dict[str, JSON_ro]] = mapped_column(postgresql.JSONB())
+    tool_result: Mapped[JSON_ro] = mapped_column(postgresql.JSONB())
+
+    message_id: Mapped[int] = mapped_column(ForeignKey("chat_message.id"))
+
+    message: Mapped["ChatMessage"] = relationship(
+        "ChatMessage", back_populates="tool_calls"
+    )
+
+
 class ChatSession(Base):
     __tablename__ = "chat_session"
 
@@ -606,7 +687,7 @@ class ChatSession(Base):
     folder: Mapped["ChatFolder"] = relationship(
         "ChatFolder", back_populates="chat_sessions"
     )
-    messages: Mapped[List["ChatMessage"]] = relationship(
+    messages: Mapped[list["ChatMessage"]] = relationship(
         "ChatMessage", back_populates="chat_session", cascade="delete"
     )
     persona: Mapped["Persona"] = relationship("Persona")
@@ -653,16 +734,20 @@ class ChatMessage(Base):
 
     chat_session: Mapped[ChatSession] = relationship("ChatSession")
     prompt: Mapped[Optional["Prompt"]] = relationship("Prompt")
-    chat_message_feedbacks: Mapped[List["ChatMessageFeedback"]] = relationship(
+    chat_message_feedbacks: Mapped[list["ChatMessageFeedback"]] = relationship(
         "ChatMessageFeedback", back_populates="chat_message"
     )
-    document_feedbacks: Mapped[List["DocumentRetrievalFeedback"]] = relationship(
+    document_feedbacks: Mapped[list["DocumentRetrievalFeedback"]] = relationship(
         "DocumentRetrievalFeedback", back_populates="chat_message"
     )
     search_docs: Mapped[list["SearchDoc"]] = relationship(
         "SearchDoc",
         secondary="chat_message__search_doc",
         back_populates="chat_messages",
+    )
+    tool_calls: Mapped[list["ToolCall"]] = relationship(
+        "ToolCall",
+        back_populates="message",
     )
 
 
@@ -678,7 +763,7 @@ class ChatFolder(Base):
     display_priority: Mapped[int] = mapped_column(Integer, nullable=True, default=0)
 
     user: Mapped[User] = relationship("User", back_populates="chat_folders")
-    chat_sessions: Mapped[List["ChatSession"]] = relationship(
+    chat_sessions: Mapped[list["ChatSession"]] = relationship(
         "ChatSession", back_populates="folder"
     )
 
@@ -725,6 +810,7 @@ class ChatMessageFeedback(Base):
     is_positive: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     required_followup: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     feedback_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    predefined_feedback: Mapped[str | None] = mapped_column(String, nullable=True)
 
     chat_message: Mapped[ChatMessage] = relationship(
         "ChatMessage", back_populates="chat_message_feedbacks"
@@ -741,7 +827,8 @@ class LLMProvider(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String, unique=True)
-    api_key: Mapped[str | None] = mapped_column(String, nullable=True)
+    provider: Mapped[str] = mapped_column(String)
+    api_key: Mapped[str | None] = mapped_column(EncryptedString(), nullable=True)
     api_base: Mapped[str | None] = mapped_column(String, nullable=True)
     api_version: Mapped[str | None] = mapped_column(String, nullable=True)
     # custom configs that should be passed to the LLM provider at inference time
@@ -779,6 +866,14 @@ class DocumentSet(Base):
     connector_credential_pairs: Mapped[list[ConnectorCredentialPair]] = relationship(
         "ConnectorCredentialPair",
         secondary=DocumentSet__ConnectorCredentialPair.__table__,
+        primaryjoin=(
+            (DocumentSet__ConnectorCredentialPair.document_set_id == id)
+            & (DocumentSet__ConnectorCredentialPair.is_current.is_(True))
+        ),
+        secondaryjoin=(
+            DocumentSet__ConnectorCredentialPair.connector_credential_pair_id
+            == ConnectorCredentialPair.id
+        ),
         back_populates="document_sets",
         overlaps="document_set",
     )
@@ -822,6 +917,33 @@ class Prompt(Base):
         "Persona",
         secondary=Persona__Prompt.__table__,
         back_populates="prompts",
+    )
+
+
+class Tool(Base):
+    __tablename__ = "tool"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=True)
+    # ID of the tool in the codebase, only applies for in-code tools.
+    # tools defined via the UI will have this as None
+    in_code_tool_id: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # OpenAPI scheme for the tool. Only applies to tools defined via the UI.
+    openapi_schema: Mapped[dict[str, Any] | None] = mapped_column(
+        postgresql.JSONB(), nullable=True
+    )
+
+    # user who created / owns the tool. Will be None for built-in tools.
+    user_id: Mapped[UUID | None] = mapped_column(ForeignKey("user.id"), nullable=True)
+
+    user: Mapped[User | None] = relationship("User", back_populates="custom_tools")
+    # Relationship to Persona through the association table
+    personas: Mapped[list["Persona"]] = relationship(
+        "Persona",
+        secondary=Persona__Tool.__table__,
+        back_populates="tools",
     )
 
 
@@ -891,6 +1013,11 @@ class Persona(Base):
     document_sets: Mapped[list[DocumentSet]] = relationship(
         "DocumentSet",
         secondary=Persona__DocumentSet.__table__,
+        back_populates="personas",
+    )
+    tools: Mapped[list[Tool]] = relationship(
+        "Tool",
+        secondary=Persona__Tool.__table__,
         back_populates="personas",
     )
     # Owner
@@ -984,13 +1111,19 @@ class KVStore(Base):
     __tablename__ = "key_value_store"
 
     key: Mapped[str] = mapped_column(String, primary_key=True)
-    value: Mapped[JSON_ro] = mapped_column(postgresql.JSONB(), nullable=False)
+    value: Mapped[JSON_ro] = mapped_column(postgresql.JSONB(), nullable=True)
+    encrypted_value: Mapped[JSON_ro] = mapped_column(EncryptedJson(), nullable=True)
 
 
 class PGFileStore(Base):
     __tablename__ = "file_store"
-    file_name = mapped_column(String, primary_key=True)
-    lobj_oid = mapped_column(Integer, nullable=False)
+
+    file_name: Mapped[str] = mapped_column(String, primary_key=True)
+    display_name: Mapped[str] = mapped_column(String, nullable=True)
+    file_origin: Mapped[FileOrigin] = mapped_column(Enum(FileOrigin, native_enum=False))
+    file_type: Mapped[str] = mapped_column(String, default="text/plain")
+    file_metadata: Mapped[JSON_ro] = mapped_column(postgresql.JSONB(), nullable=True)
+    lobj_oid: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
 """

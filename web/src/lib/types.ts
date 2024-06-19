@@ -1,5 +1,15 @@
 import { Persona } from "@/app/admin/assistants/interfaces";
 
+export interface UserPreferences {
+  chosen_assistants: number[] | null;
+}
+
+export enum UserStatus {
+  live = "live",
+  invited = "invited",
+  deactivated = "deactivated",
+}
+
 export interface User {
   id: string;
   email: string;
@@ -7,6 +17,8 @@ export interface User {
   is_superuser: string;
   is_verified: string;
   role: "basic" | "admin";
+  preferences: UserPreferences;
+  status: UserStatus;
 }
 
 export interface MinimalUserSnapshot {
@@ -37,10 +49,17 @@ export type ValidSources =
   | "file"
   | "google_sites"
   | "loopio"
+  | "dropbox"
+  | "salesforce"
   | "sharepoint"
+  | "teams"
   | "zendesk"
   | "discourse"
-  | "axero";
+  | "axero"
+  | "clickup"
+  | "axero"
+  | "wikipedia"
+  | "mediawiki";
 
 export type ValidInputTypes = "load_state" | "poll" | "event";
 export type ValidStatuses =
@@ -66,6 +85,7 @@ export interface ConnectorBase<T> {
   source: ValidSources;
   connector_specific_config: T;
   refresh_freq: number | null;
+  prune_freq: number | null;
   disabled: boolean;
 }
 
@@ -115,8 +135,16 @@ export interface JiraConfig {
   comment_email_blacklist?: string[];
 }
 
+export interface SalesforceConfig {
+  requested_objects?: string[];
+}
+
 export interface SharepointConfig {
   sites?: string[];
+}
+
+export interface TeamsConfig {
+  teams?: string[];
 }
 
 export interface DiscourseConfig {
@@ -126,6 +154,10 @@ export interface DiscourseConfig {
 
 export interface AxeroConfig {
   spaces?: string[];
+}
+
+export interface TeamsConfig {
+  teams?: string[];
 }
 
 export interface ProductboardConfig {}
@@ -172,12 +204,34 @@ export interface Document360Config {
   categories?: string[];
 }
 
+export interface ClickupConfig {
+  connector_type: "list" | "folder" | "space" | "workspace";
+  connector_ids?: string[];
+  retrieve_task_comments: boolean;
+}
+
 export interface GoogleSitesConfig {
   zip_path: string;
   base_url: string;
 }
 
 export interface ZendeskConfig {}
+
+export interface DropboxConfig {}
+
+export interface MediaWikiBaseConfig {
+  connector_name: string;
+  language_code: string;
+  categories?: string[];
+  pages?: string[];
+  recurse_depth?: number;
+}
+
+export interface MediaWikiConfig extends MediaWikiBaseConfig {
+  hostname: string;
+}
+
+export interface WikipediaConfig extends MediaWikiBaseConfig {}
 
 export interface IndexAttemptSnapshot {
   id: number;
@@ -331,16 +385,37 @@ export interface Document360CredentialJson {
   document360_api_token: string;
 }
 
+export interface ClickupCredentialJson {
+  clickup_api_token: string;
+  clickup_team_id: string;
+}
+
 export interface ZendeskCredentialJson {
   zendesk_subdomain: string;
   zendesk_email: string;
   zendesk_token: string;
 }
 
+export interface DropboxCredentialJson {
+  dropbox_access_token: string;
+}
+
+export interface SalesforceCredentialJson {
+  sf_username: string;
+  sf_password: string;
+  sf_security_token: string;
+}
+
 export interface SharepointCredentialJson {
-  aad_client_id: string;
-  aad_client_secret: string;
-  aad_directory_id: string;
+  sp_client_id: string;
+  sp_client_secret: string;
+  sp_directory_id: string;
+}
+
+export interface TeamsCredentialJson {
+  teams_client_id: string;
+  teams_client_secret: string;
+  teams_directory_id: string;
 }
 
 export interface DiscourseCredentialJson {
@@ -352,6 +427,9 @@ export interface AxeroCredentialJson {
   base_url: string;
   axero_api_token: string;
 }
+
+export interface MediaWikiCredentialJson {}
+export interface WikipediaCredentialJson extends MediaWikiCredentialJson {}
 
 // DELETION
 

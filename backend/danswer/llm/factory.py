@@ -13,19 +13,21 @@ from danswer.llm.override_models import LLMOverride
 
 
 def get_llm_for_persona(
-    persona: Persona, llm_override: LLMOverride | None = None
+    persona: Persona,
+    llm_override: LLMOverride | None = None,
+    additional_headers: dict[str, str] | None = None,
 ) -> LLM:
     model_provider_override = llm_override.model_provider if llm_override else None
     model_version_override = llm_override.model_version if llm_override else None
     temperature_override = llm_override.temperature if llm_override else None
 
     return get_default_llm(
-        gen_ai_model_provider=model_provider_override
-        or persona.llm_model_provider_override,
-        gen_ai_model_version_override=(
-            model_version_override or persona.llm_model_version_override
+        model_provider_name=(
+            model_provider_override or persona.llm_model_provider_override
         ),
+        model_version=(model_version_override or persona.llm_model_version_override),
         temperature=temperature_override or GEN_AI_TEMPERATURE,
+        additional_headers=additional_headers,
     )
 
 
@@ -33,23 +35,24 @@ def get_default_llm(
     timeout: int = QA_TIMEOUT,
     temperature: float = GEN_AI_TEMPERATURE,
     use_fast_llm: bool = False,
-    gen_ai_model_provider: str | None = None,
-    gen_ai_model_version_override: str | None = None,
+    model_provider_name: str | None = None,
+    model_version: str | None = None,
+    additional_headers: dict[str, str] | None = None,
 ) -> LLM:
     if DISABLE_GENERATIVE_AI:
         raise GenAIDisabledException()
 
     # TODO: pass this in
     with get_session_context_manager() as session:
-        if gen_ai_model_provider is None:
+        if model_provider_name is None:
             llm_provider = fetch_default_provider(session)
         else:
-            llm_provider = fetch_provider(session, gen_ai_model_provider)
+            llm_provider = fetch_provider(session, model_provider_name)
 
     if not llm_provider:
         raise ValueError("No default LLM provider found")
 
-    model_name = gen_ai_model_version_override or (
+    model_name = model_version or (
         (llm_provider.fast_default_model_name or llm_provider.default_model_name)
         if use_fast_llm
         else llm_provider.default_model_name
@@ -58,7 +61,7 @@ def get_default_llm(
         raise ValueError("No default model name found")
 
     return get_llm(
-        provider=llm_provider.name,
+        provider=llm_provider.provider,
         model=model_name,
         api_key=llm_provider.api_key,
         api_base=llm_provider.api_base,
@@ -66,6 +69,7 @@ def get_default_llm(
         custom_config=llm_provider.custom_config,
         timeout=timeout,
         temperature=temperature,
+        additional_headers=additional_headers,
     )
 
 
@@ -78,7 +82,14 @@ def get_llm(
     custom_config: dict[str, str] | None = None,
     temperature: float = GEN_AI_TEMPERATURE,
     timeout: int = QA_TIMEOUT,
+    additional_headers: dict[str, str] | None = None,
 ) -> LLM:
+    extra_headers = {}
+    if additional_headers:
+        extra_headers.update(additional_headers)
+    if LITELLM_EXTRA_HEADERS:
+        extra_headers.update(LITELLM_EXTRA_HEADERS)
+
     return DefaultMultiLLM(
         model_provider=provider,
         model_name=model,
@@ -88,5 +99,5 @@ def get_llm(
         timeout=timeout,
         temperature=temperature,
         custom_config=custom_config,
-        extra_headers=LITELLM_EXTRA_HEADERS,
+        extra_headers=extra_headers,
     )

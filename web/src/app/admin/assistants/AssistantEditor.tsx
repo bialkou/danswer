@@ -33,13 +33,18 @@ import { SuccessfulPersonaUpdateRedirectType } from "./enums";
 import { DocumentSetSelectable } from "@/components/documentSet/DocumentSetSelectable";
 import { FullLLMProvider } from "../models/llm/interfaces";
 import { Option } from "@/components/Dropdown";
+import { ToolSnapshot } from "@/lib/tools/interfaces";
+import { checkUserIsNoAuthUser } from "@/lib/user";
+import { addAssistantToList } from "@/lib/assistants/updateAssistantPreferences";
+import { checkLLMSupportsImageInput } from "@/lib/llm/utils";
 
-const DEFAULT_LLM_PROVIDER_TO_DISPLAY_NAME: Record<string, string> = {
-  openai: "OpenAI",
-  azure: "Azure OpenAI",
-  anthropic: "Anthropic",
-  bedrock: "AWS Bedrock",
-};
+function findSearchTool(tools: ToolSnapshot[]) {
+  return tools.find((tool) => tool.in_code_tool_id === "SearchTool");
+}
+
+function findImageGenerationTool(tools: ToolSnapshot[]) {
+  return tools.find((tool) => tool.in_code_tool_id === "ImageGenerationTool");
+}
 
 function Label({ children }: { children: string | JSX.Element }) {
   return (
@@ -59,6 +64,8 @@ export function AssistantEditor({
   defaultPublic,
   redirectType,
   llmProviders,
+  tools,
+  shouldAddAssistantToUserPreferences,
 }: {
   existingPersona?: Persona | null;
   ccPairs: CCPairBasicInfo[];
@@ -67,6 +74,8 @@ export function AssistantEditor({
   defaultPublic: boolean;
   redirectType: SuccessfulPersonaUpdateRedirectType;
   llmProviders: FullLLMProvider[];
+  tools: ToolSnapshot[];
+  shouldAddAssistantToUserPreferences?: boolean;
 }) {
   const router = useRouter();
   const { popup, setPopup } = usePopup();
@@ -105,9 +114,18 @@ export function AssistantEditor({
     }
   }, []);
 
-  const defaultLLM = llmProviders.find(
+  const defaultProvider = llmProviders.find(
     (llmProvider) => llmProvider.is_default_provider
-  )?.default_model_name;
+  );
+  const defaultProviderName = defaultProvider?.provider;
+  const defaultModelName = defaultProvider?.default_model_name;
+  const providerDisplayNameToProviderName = new Map<string, string>();
+  llmProviders.forEach((llmProvider) => {
+    providerDisplayNameToProviderName.set(
+      llmProvider.name,
+      llmProvider.provider
+    );
+  });
 
   const modelOptionsByProvider = new Map<string, Option<string>[]>();
   llmProviders.forEach((llmProvider) => {
@@ -119,35 +137,66 @@ export function AssistantEditor({
     });
     modelOptionsByProvider.set(llmProvider.name, providerOptions);
   });
+  const providerSupportingImageGenerationExists = llmProviders.some(
+    (provider) => provider.provider === "openai"
+  );
+
+  const personaCurrentToolIds =
+    existingPersona?.tools.map((tool) => tool.id) || [];
+  const searchTool = findSearchTool(tools);
+  const imageGenerationTool = providerSupportingImageGenerationExists
+    ? findImageGenerationTool(tools)
+    : undefined;
+  const customTools = tools.filter(
+    (tool) =>
+      tool.in_code_tool_id !== searchTool?.in_code_tool_id &&
+      tool.in_code_tool_id !== imageGenerationTool?.in_code_tool_id
+  );
+
+  const availableTools = [
+    ...customTools,
+    ...(searchTool ? [searchTool] : []),
+    ...(imageGenerationTool ? [imageGenerationTool] : []),
+  ];
+  const enabledToolsMap: { [key: number]: boolean } = {};
+  availableTools.forEach((tool) => {
+    enabledToolsMap[tool.id] = personaCurrentToolIds.includes(tool.id);
+  });
+
+  const initialValues = {
+    name: existingPersona?.name ?? "",
+    description: existingPersona?.description ?? "",
+    system_prompt: existingPrompt?.system_prompt ?? "",
+    task_prompt: existingPrompt?.task_prompt ?? "",
+    is_public: existingPersona?.is_public ?? defaultPublic,
+    document_set_ids:
+      existingPersona?.document_sets?.map((documentSet) => documentSet.id) ??
+      ([] as number[]),
+    num_chunks: existingPersona?.num_chunks ?? null,
+    include_citations: existingPersona?.prompts[0]?.include_citations ?? true,
+    llm_relevance_filter: existingPersona?.llm_relevance_filter ?? false,
+    llm_model_provider_override:
+      existingPersona?.llm_model_provider_override ?? null,
+    llm_model_version_override:
+      existingPersona?.llm_model_version_override ?? null,
+    starter_messages: existingPersona?.starter_messages ?? [],
+    enabled_tools_map: enabledToolsMap,
+    //   search_tool_enabled: existingPersona
+    //   ? personaCurrentToolIds.includes(searchTool!.id)
+    //   : ccPairs.length > 0,
+    // image_generation_tool_enabled: imageGenerationTool
+    //   ? personaCurrentToolIds.includes(imageGenerationTool.id)
+    //   : false,
+    // EE Only
+    groups: existingPersona?.groups ?? [],
+  };
 
   return (
     <div>
       {popup}
       <Formik
         enableReinitialize={true}
-        initialValues={{
-          name: existingPersona?.name ?? "",
-          description: existingPersona?.description ?? "",
-          system_prompt: existingPrompt?.system_prompt ?? "",
-          task_prompt: existingPrompt?.task_prompt ?? "",
-          disable_retrieval: (existingPersona?.num_chunks ?? 10) === 0,
-          is_public: existingPersona?.is_public ?? defaultPublic,
-          document_set_ids:
-            existingPersona?.document_sets?.map(
-              (documentSet) => documentSet.id
-            ) ?? ([] as number[]),
-          num_chunks: existingPersona?.num_chunks ?? null,
-          include_citations:
-            existingPersona?.prompts[0]?.include_citations ?? true,
-          llm_relevance_filter: existingPersona?.llm_relevance_filter ?? false,
-          llm_model_provider_override:
-            existingPersona?.llm_model_provider_override ?? null,
-          llm_model_version_override:
-            existingPersona?.llm_model_version_override ?? null,
-          starter_messages: existingPersona?.starter_messages ?? [],
-          // EE Only
-          groups: existingPersona?.groups ?? [],
-        }}
+        initialValues={initialValues}
         validationSchema={Yup.object()
           .shape({
             name: Yup.string().required("Must give the Assistant a name!"),
@@ -156,10 +205,9 @@ export function AssistantEditor({
             ),
             system_prompt: Yup.string(),
             task_prompt: Yup.string(),
-            disable_retrieval: Yup.boolean().required(),
             is_public: Yup.boolean().required(),
             document_set_ids: Yup.array().of(Yup.number()),
-            num_chunks: Yup.number().max(20).nullable(),
+            num_chunks: Yup.number().nullable(),
             include_citations: Yup.boolean().required(),
             llm_relevance_filter: Yup.boolean().required(),
             llm_model_version_override: Yup.string().nullable(),
@@ -217,11 +265,36 @@ export function AssistantEditor({
 
           formikHelpers.setSubmitting(true);
 
+          let enabledTools = Object.keys(values.enabled_tools_map)
+            .map((toolId) => Number(toolId))
+            .filter((toolId) => values.enabled_tools_map[toolId]);
+          const searchToolEnabled = searchTool
+            ? enabledTools.includes(searchTool.id)
+            : false;
+          const imageGenerationToolEnabled = imageGenerationTool
+            ? enabledTools.includes(imageGenerationTool.id)
+            : false;
+
+          if (imageGenerationToolEnabled) {
+            if (
+              !checkLLMSupportsImageInput(
+                providerDisplayNameToProviderName.get(
+                  values.llm_model_provider_override || ""
+                ) ||
+                  defaultProviderName ||
+                  "",
+                values.llm_model_version_override || defaultModelName || ""
+              )
+            ) {
+              enabledTools = enabledTools.filter(
+                (toolId) => toolId !== imageGenerationTool!.id
+              );
+            }
+          }
+
           // if disable_retrieval is set, set num_chunks to 0
           // to tell the backend to not fetch any documents
-          const numChunks = values.disable_retrieval
-            ? 0
-            : values.num_chunks || 10;
+          const numChunks = searchToolEnabled ? values.num_chunks || 10 : 0;
 
           // don't set groups if marked as public
           const groups = values.is_public ? [] : values.groups;
@@ -234,15 +307,19 @@ export function AssistantEditor({
               existingPromptId: existingPrompt?.id,
               ...values,
               num_chunks: numChunks,
-              users: user ? [user.id] : undefined,
+              users:
+                user && !checkUserIsNoAuthUser(user.id) ? [user.id] : undefined,
               groups,
+              tool_ids: enabledTools,
             });
           } else {
             [promptResponse, personaResponse] = await createPersona({
               ...values,
               num_chunks: numChunks,
-              users: user ? [user.id] : undefined,
+              users:
+                user && !checkUserIsNoAuthUser(user.id) ? [user.id] : undefined,
               groups,
+              tool_ids: enabledTools,
             });
           }
 
@@ -263,554 +340,612 @@ export function AssistantEditor({
             });
             formikHelpers.setSubmitting(false);
           } else {
+            const assistant = await personaResponse.json();
+            const assistantId = assistant.id;
+            if (
+              shouldAddAssistantToUserPreferences &&
+              user?.preferences?.chosen_assistants
+            ) {
+              const success = await addAssistantToList(
+                assistantId,
+                user.preferences.chosen_assistants
+              );
+              if (success) {
+                setPopup({
+                  message: `"${assistant.name}" has been added to your list.`,
+                  type: "success",
+                });
+                router.refresh();
+              } else {
+                setPopup({
+                  message: `"${assistant.name}" could not be added to your list.`,
+                  type: "error",
+                });
+              }
+            }
             router.push(
               redirectType === SuccessfulPersonaUpdateRedirectType.ADMIN
                 ? `/admin/assistants?u=${Date.now()}`
-                : `/chat?assistantId=${
-                    ((await personaResponse.json()) as Persona).id
-                  }`
+                : `/chat?assistantId=${assistantId}`
             );
           }
         }}
       >
-        {({ isSubmitting, values, setFieldValue }) => (
-          <Form>
-            <div className="pb-6">
-              <HidableSection sectionTitle="Basics">
-                <>
-                  <TextFormField
-                    name="name"
-                    label="Name"
-                    disabled={isUpdate}
-                    subtext="Users will be able to select this Assistant based on this name."
-                  />
+        {({ isSubmitting, values, setFieldValue }) => {
+          function toggleToolInValues(toolId: number) {
+            const updatedEnabledToolsMap = {
+              ...values.enabled_tools_map,
+              [toolId]: !values.enabled_tools_map[toolId],
+            };
+            setFieldValue("enabled_tools_map", updatedEnabledToolsMap);
+          }
 
-                  <TextFormField
-                    name="description"
-                    label="Description"
-                    subtext="Provide a short descriptions which gives users a hint as to what they should use this Assistant for."
-                  />
+          function searchToolEnabled() {
+            return searchTool && values.enabled_tools_map[searchTool.id]
+              ? true
+              : false;
+          }
 
-                  <TextFormField
-                    name="system_prompt"
-                    label="System Prompt"
-                    isTextArea={true}
-                    subtext={
-                      'Give general info about what the Assistant is about. For example, "You are an assistant for On-Call engineers. Your goal is to read the provided context documents and give recommendations as to how to resolve the issue."'
-                    }
-                    onChange={(e) => {
-                      setFieldValue("system_prompt", e.target.value);
-                      triggerFinalPromptUpdate(
-                        e.target.value,
-                        values.task_prompt,
-                        values.disable_retrieval
-                      );
-                    }}
-                    error={finalPromptError}
-                  />
+          return (
+            <Form>
+              <div className="pb-6">
+                <HidableSection sectionTitle="Basics">
+                  <>
+                    <TextFormField
+                      name="name"
+                      label="Name"
+                      disabled={isUpdate}
+                      subtext="Users will be able to select this Assistant based on this name."
+                    />
 
-                  <TextFormField
-                    name="task_prompt"
-                    label="Task Prompt (Optional)"
-                    isTextArea={true}
-                    subtext={`Give specific instructions as to what to do with the user query. 
+                    <TextFormField
+                      name="description"
+                      label="Description"
+                      subtext="Provide a short descriptions which gives users a hint as to what they should use this Assistant for."
+                    />
+
+                    <TextFormField
+                      name="system_prompt"
+                      label="System Prompt"
+                      isTextArea={true}
+                      subtext={
+                        'Give general info about what the Assistant is about. For example, "You are an assistant for On-Call engineers. Your goal is to read the provided context documents and give recommendations as to how to resolve the issue."'
+                      }
+                      onChange={(e) => {
+                        setFieldValue("system_prompt", e.target.value);
+                        triggerFinalPromptUpdate(
+                          e.target.value,
+                          values.task_prompt,
+                          searchToolEnabled()
+                        );
+                      }}
+                      error={finalPromptError}
+                    />
+
+                    <TextFormField
+                      name="task_prompt"
+                      label="Task Prompt (Optional)"
+                      isTextArea={true}
+                      subtext={`Give specific instructions as to what to do with the user query. 
                       For example, "Find any relevant sections from the provided documents that can 
                       help the user resolve their issue and explain how they are relevant."`}
-                    onChange={(e) => {
-                      setFieldValue("task_prompt", e.target.value);
-                      triggerFinalPromptUpdate(
-                        values.system_prompt,
-                        e.target.value,
-                        values.disable_retrieval
-                      );
-                    }}
-                    error={finalPromptError}
-                  />
+                      onChange={(e) => {
+                        setFieldValue("task_prompt", e.target.value);
+                        triggerFinalPromptUpdate(
+                          values.system_prompt,
+                          e.target.value,
+                          searchToolEnabled()
+                        );
+                      }}
+                      error={finalPromptError}
+                    />
 
-                  <Label>Final Prompt</Label>
+                    <Label>Final Prompt</Label>
 
-                  {finalPrompt ? (
-                    <pre className="text-sm mt-2 whitespace-pre-wrap">
-                      {finalPrompt}
-                    </pre>
-                  ) : (
-                    "-"
-                  )}
-                </>
-              </HidableSection>
-
-              <Divider />
-
-              {ccPairs.length > 0 && (
-                <>
-                  <HidableSection
-                    sectionTitle="[Advanced] Knowledge Base"
-                    defaultHidden
-                  >
-                    <>
-                      <BooleanFormField
-                        name="disable_retrieval"
-                        label="Disable Retrieval"
-                        subtext={`
-                          If set, the Assistant will not fetch any context documents to aid in the response. 
-                          Instead, it will only use the supplied system and task prompts plus the user 
-                          query in order to generate a response`}
-                        onChange={(e) => {
-                          setFieldValue("disable_retrieval", e.target.checked);
-                          triggerFinalPromptUpdate(
-                            values.system_prompt,
-                            values.task_prompt,
-                            e.target.checked
-                          );
-                        }}
-                      />
-
-                      {!values.disable_retrieval && (
-                        <>
-                          <div>
-                            <SubLabel>
-                              <>
-                                Select which{" "}
-                                {!user || user.role === "admin" ? (
-                                  <Link
-                                    href="/admin/documents/sets"
-                                    className="text-blue-500"
-                                    target="_blank"
-                                  >
-                                    Document Sets
-                                  </Link>
-                                ) : (
-                                  "Document Sets"
-                                )}{" "}
-                                that this Assistant should search through. If
-                                none are specified, the Assistant will search
-                                through all available documents in order to try
-                                and respond to queries.
-                              </>
-                            </SubLabel>
-                          </div>
-
-                          {documentSets.length > 0 ? (
-                            <FieldArray
-                              name="document_set_ids"
-                              render={(arrayHelpers: ArrayHelpers) => (
-                                <div>
-                                  <div className="mb-3 mt-2 flex gap-2 flex-wrap text-sm">
-                                    {documentSets.map((documentSet) => {
-                                      const ind =
-                                        values.document_set_ids.indexOf(
-                                          documentSet.id
-                                        );
-                                      let isSelected = ind !== -1;
-                                      return (
-                                        <DocumentSetSelectable
-                                          key={documentSet.id}
-                                          documentSet={documentSet}
-                                          isSelected={isSelected}
-                                          onSelect={() => {
-                                            if (isSelected) {
-                                              arrayHelpers.remove(ind);
-                                            } else {
-                                              arrayHelpers.push(documentSet.id);
-                                            }
-                                          }}
-                                        />
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              )}
-                            />
-                          ) : (
-                            <Italic className="text-sm">
-                              No Document Sets available.{" "}
-                              {user?.role !== "admin" && (
-                                <>
-                                  If this functionality would be useful, reach
-                                  out to the administrators of Danswer for
-                                  assistance.
-                                </>
-                              )}
-                            </Italic>
-                          )}
-                        </>
-                      )}
-                    </>
-                  </HidableSection>
-
-                  <Divider />
-                </>
-              )}
-
-              {!values.disable_retrieval && (
-                <>
-                  <HidableSection
-                    sectionTitle="[Advanced] Response Style"
-                    defaultHidden
-                  >
-                    <>
-                      <BooleanFormField
-                        name="include_citations"
-                        label="Include Citations"
-                        subtext={`
-                        If set, the response will include bracket citations ([1], [2], etc.) 
-                        for each document used by the LLM to help inform the response. This is 
-                        the same technique used by the default Assistants. In general, we recommend 
-                        to leave this enabled in order to increase trust in the LLM answer.`}
-                      />
-                    </>
-                  </HidableSection>
-
-                  <Divider />
-                </>
-              )}
-
-              {llmProviders.length > 0 && (
-                <>
-                  <HidableSection
-                    sectionTitle="[Advanced] Model Selection"
-                    defaultHidden
-                  >
-                    <>
-                      <Text>
-                        Pick which LLM to use for this Assistant. If left as
-                        Default, will use <b className="italic">{defaultLLM}</b>
-                        .
-                        <br />
-                        <br />
-                        For more information on the different LLMs, checkout the{" "}
-                        <a
-                          href="https://platform.openai.com/docs/models"
-                          target="_blank"
-                          className="text-blue-500"
-                        >
-                          OpenAI docs
-                        </a>
-                        .
-                      </Text>
-
-                      <div className="flex mt-6">
-                        <div className="w-96">
-                          <SubLabel>LLM Provider</SubLabel>
-                          <SelectorFormField
-                            name="llm_model_provider_override"
-                            options={llmProviders.map((llmProvider) => ({
-                              name:
-                                DEFAULT_LLM_PROVIDER_TO_DISPLAY_NAME[
-                                  llmProvider.name
-                                ] || llmProvider.name,
-                              value: llmProvider.name,
-                            }))}
-                            includeDefault={true}
-                            onSelect={(selected) => {
-                              if (
-                                selected !== values.llm_model_provider_override
-                              ) {
-                                setFieldValue(
-                                  "llm_model_version_override",
-                                  null
-                                );
-                              }
-                              setFieldValue(
-                                "llm_model_provider_override",
-                                selected
-                              );
-                            }}
-                          />
-                        </div>
-
-                        {values.llm_model_provider_override && (
-                          <div className="w-96 ml-4">
-                            <SubLabel>Model</SubLabel>
-                            <SelectorFormField
-                              name="llm_model_version_override"
-                              options={
-                                modelOptionsByProvider.get(
-                                  values.llm_model_provider_override
-                                ) || []
-                              }
-                              maxHeight="max-h-72"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  </HidableSection>
-
-                  <Divider />
-                </>
-              )}
-
-              {!values.disable_retrieval && (
-                <>
-                  <HidableSection
-                    sectionTitle="[Advanced] Retrieval Customization"
-                    defaultHidden
-                  >
-                    <>
-                      <TextFormField
-                        name="num_chunks"
-                        label="Number of Chunks"
-                        subtext={
-                          <div>
-                            How many chunks should we feed into the LLM when
-                            generating the final response? Each chunk is ~400
-                            words long.
-                            <br />
-                            <br />
-                            If unspecified, will use 10 chunks.
-                          </div>
-                        }
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          // Allow only integer values
-                          if (value === "" || /^[0-9]+$/.test(value)) {
-                            setFieldValue("num_chunks", value);
-                          }
-                        }}
-                      />
-
-                      <BooleanFormField
-                        name="llm_relevance_filter"
-                        label="Apply LLM Relevance Filter"
-                        subtext={
-                          "If enabled, the LLM will filter out chunks that are not relevant to the user query."
-                        }
-                      />
-                    </>
-                  </HidableSection>
-
-                  <Divider />
-                </>
-              )}
-
-              <HidableSection
-                sectionTitle="[Advanced] Starter Messages"
-                defaultHidden
-              >
-                <>
-                  <div className="mb-4">
-                    <SubLabel>
-                      Starter Messages help guide users to use this Assistant.
-                      They are shown to the user as clickable options when they
-                      select this Assistant. When selected, the specified
-                      message is sent to the LLM as the initial user message.
-                    </SubLabel>
-                  </div>
-
-                  <FieldArray
-                    name="starter_messages"
-                    render={(arrayHelpers: ArrayHelpers<StarterMessage[]>) => (
-                      <div>
-                        {values.starter_messages &&
-                          values.starter_messages.length > 0 &&
-                          values.starter_messages.map((_, index) => {
-                            return (
-                              <div
-                                key={index}
-                                className={index === 0 ? "mt-2" : "mt-6"}
-                              >
-                                <div className="flex">
-                                  <div className="w-full mr-6 border border-border p-3 rounded">
-                                    <div>
-                                      <Label>Name</Label>
-                                      <SubLabel>
-                                        Shows up as the &quot;title&quot; for
-                                        this Starter Message. For example,
-                                        &quot;Write an email&quot;.
-                                      </SubLabel>
-                                      <Field
-                                        name={`starter_messages[${index}].name`}
-                                        className={`
-                                        border 
-                                        border-border 
-                                        bg-background 
-                                        rounded 
-                                        w-full 
-                                        py-2 
-                                        px-3 
-                                        mr-4
-                                      `}
-                                        autoComplete="off"
-                                      />
-                                      <ErrorMessage
-                                        name={`starter_messages[${index}].name`}
-                                        component="div"
-                                        className="text-error text-sm mt-1"
-                                      />
-                                    </div>
-
-                                    <div className="mt-3">
-                                      <Label>Description</Label>
-                                      <SubLabel>
-                                        A description which tells the user what
-                                        they might want to use this Starter
-                                        Message for. For example &quot;to a
-                                        client about a new feature&quot;
-                                      </SubLabel>
-                                      <Field
-                                        name={`starter_messages.${index}.description`}
-                                        className={`
-                                        border 
-                                        border-border 
-                                        bg-background 
-                                        rounded 
-                                        w-full 
-                                        py-2 
-                                        px-3 
-                                        mr-4
-                                      `}
-                                        autoComplete="off"
-                                      />
-                                      <ErrorMessage
-                                        name={`starter_messages[${index}].description`}
-                                        component="div"
-                                        className="text-error text-sm mt-1"
-                                      />
-                                    </div>
-
-                                    <div className="mt-3">
-                                      <Label>Message</Label>
-                                      <SubLabel>
-                                        The actual message to be sent as the
-                                        initial user message if a user selects
-                                        this starter prompt. For example,
-                                        &quot;Write me an email to a client
-                                        about a new billing feature we just
-                                        released.&quot;
-                                      </SubLabel>
-                                      <Field
-                                        name={`starter_messages[${index}].message`}
-                                        className={`
-                                        border 
-                                        border-border 
-                                        bg-background 
-                                        rounded 
-                                        w-full 
-                                        py-2 
-                                        px-3 
-                                        mr-4
-                                      `}
-                                        as="textarea"
-                                        autoComplete="off"
-                                      />
-                                      <ErrorMessage
-                                        name={`starter_messages[${index}].message`}
-                                        component="div"
-                                        className="text-error text-sm mt-1"
-                                      />
-                                    </div>
-                                  </div>
-                                  <div className="my-auto">
-                                    <FiX
-                                      className="my-auto w-10 h-10 cursor-pointer hover:bg-hover rounded p-2"
-                                      onClick={() => arrayHelpers.remove(index)}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-
-                        <Button
-                          onClick={() => {
-                            arrayHelpers.push({
-                              name: "",
-                              description: "",
-                              message: "",
-                            });
-                          }}
-                          className="mt-3"
-                          color="green"
-                          size="xs"
-                          type="button"
-                          icon={FiPlus}
-                        >
-                          Add New
-                        </Button>
-                      </div>
+                    {finalPrompt ? (
+                      <pre className="text-sm mt-2 whitespace-pre-wrap">
+                        {finalPrompt}
+                      </pre>
+                    ) : (
+                      "-"
                     )}
-                  />
-                </>
-              </HidableSection>
+                  </>
+                </HidableSection>
 
-              <Divider />
+                <Divider />
 
-              {EE_ENABLED && userGroups && (!user || user.role === "admin") && (
-                <>
-                  <HidableSection sectionTitle="Access">
-                    <>
-                      <BooleanFormField
-                        name="is_public"
-                        label="Is Public?"
-                        subtext="If set, this Assistant will be available to all users. If not, only the specified User Groups will be able to access it."
-                      />
+                <HidableSection sectionTitle="Tools">
+                  <>
+                    {ccPairs.length > 0 && searchTool && (
+                      <>
+                        <BooleanFormField
+                          name={`enabled_tools_map.${searchTool.id}`}
+                          label="Search Tool"
+                          subtext={`The Search Tool allows the Assistant to search through connected knowledge to help build an answer.`}
+                          onChange={() => {
+                            setFieldValue("num_chunks", null);
+                            toggleToolInValues(searchTool.id);
+                          }}
+                        />
 
-                      {userGroups &&
-                        userGroups.length > 0 &&
-                        !values.is_public && (
-                          <div>
-                            <Text>
-                              Select which User Groups should have access to
-                              this Assistant.
-                            </Text>
-                            <div className="flex flex-wrap gap-2 mt-2">
-                              {userGroups.map((userGroup) => {
-                                const isSelected = values.groups.includes(
-                                  userGroup.id
-                                );
-                                return (
-                                  <Bubble
-                                    key={userGroup.id}
-                                    isSelected={isSelected}
-                                    onClick={() => {
-                                      if (isSelected) {
-                                        setFieldValue(
-                                          "groups",
-                                          values.groups.filter(
-                                            (id) => id !== userGroup.id
-                                          )
-                                        );
-                                      } else {
-                                        setFieldValue("groups", [
-                                          ...values.groups,
-                                          userGroup.id,
-                                        ]);
+                        {searchToolEnabled() && (
+                          <div className="pl-4 border-l-2 ml-4 border-border">
+                            {ccPairs.length > 0 && (
+                              <>
+                                <Label>Document Sets</Label>
+
+                                <div>
+                                  <SubLabel>
+                                    <>
+                                      Select which{" "}
+                                      {!user || user.role === "admin" ? (
+                                        <Link
+                                          href="/admin/documents/sets"
+                                          className="text-blue-500"
+                                          target="_blank"
+                                        >
+                                          Document Sets
+                                        </Link>
+                                      ) : (
+                                        "Document Sets"
+                                      )}{" "}
+                                      that this Assistant should search through.
+                                      If none are specified, the Assistant will
+                                      search through all available documents in
+                                      order to try and respond to queries.
+                                    </>
+                                  </SubLabel>
+                                </div>
+
+                                {documentSets.length > 0 ? (
+                                  <FieldArray
+                                    name="document_set_ids"
+                                    render={(arrayHelpers: ArrayHelpers) => (
+                                      <div>
+                                        <div className="mb-3 mt-2 flex gap-2 flex-wrap text-sm">
+                                          {documentSets.map((documentSet) => {
+                                            const ind =
+                                              values.document_set_ids.indexOf(
+                                                documentSet.id
+                                              );
+                                            let isSelected = ind !== -1;
+                                            return (
+                                              <DocumentSetSelectable
+                                                key={documentSet.id}
+                                                documentSet={documentSet}
+                                                isSelected={isSelected}
+                                                onSelect={() => {
+                                                  if (isSelected) {
+                                                    arrayHelpers.remove(ind);
+                                                  } else {
+                                                    arrayHelpers.push(
+                                                      documentSet.id
+                                                    );
+                                                  }
+                                                }}
+                                              />
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    )}
+                                  />
+                                ) : (
+                                  <Italic className="text-sm">
+                                    No Document Sets available.{" "}
+                                    {user?.role !== "admin" && (
+                                      <>
+                                        If this functionality would be useful,
+                                        reach out to the administrators of
+                                        Danswer for assistance.
+                                      </>
+                                    )}
+                                  </Italic>
+                                )}
+
+                                <>
+                                  <TextFormField
+                                    name="num_chunks"
+                                    label="Number of Chunks"
+                                    placeholder="If unspecified, will use 10 chunks."
+                                    subtext={
+                                      <div>
+                                        How many chunks should we feed into the
+                                        LLM when generating the final response?
+                                        Each chunk is ~400 words long.
+                                      </div>
+                                    }
+                                    onChange={(e) => {
+                                      const value = e.target.value;
+                                      // Allow only integer values
+                                      if (
+                                        value === "" ||
+                                        /^[0-9]+$/.test(value)
+                                      ) {
+                                        setFieldValue("num_chunks", value);
                                       }
                                     }}
-                                  >
-                                    <div className="flex">
-                                      <GroupsIcon />
-                                      <div className="ml-1">
-                                        {userGroup.name}
-                                      </div>
-                                    </div>
-                                  </Bubble>
-                                );
-                              })}
-                            </div>
+                                  />
+
+                                  <Label>Misc</Label>
+
+                                  <BooleanFormField
+                                    name="llm_relevance_filter"
+                                    label="Apply LLM Relevance Filter"
+                                    subtext={
+                                      "If enabled, the LLM will filter out chunks that are not relevant to the user query."
+                                    }
+                                  />
+
+                                  <BooleanFormField
+                                    name="include_citations"
+                                    label="Include Citations"
+                                    subtext={`
+                                If set, the response will include bracket citations ([1], [2], etc.) 
+                                for each document used by the LLM to help inform the response. This is 
+                                the same technique used by the default Assistants. In general, we recommend 
+                                to leave this enabled in order to increase trust in the LLM answer.`}
+                                  />
+                                </>
+                              </>
+                            )}
                           </div>
                         )}
-                    </>
-                  </HidableSection>
-                  <Divider />
-                </>
-              )}
+                      </>
+                    )}
 
-              <div className="flex">
-                <Button
-                  className="mx-auto"
-                  color="green"
-                  size="md"
-                  type="submit"
-                  disabled={isSubmitting}
+                    {imageGenerationTool &&
+                      checkLLMSupportsImageInput(
+                        providerDisplayNameToProviderName.get(
+                          values.llm_model_provider_override || ""
+                        ) ||
+                          defaultProviderName ||
+                          "",
+                        values.llm_model_version_override ||
+                          defaultModelName ||
+                          ""
+                      ) && (
+                        <BooleanFormField
+                          name={`enabled_tools_map.${imageGenerationTool.id}`}
+                          label="Image Generation Tool"
+                          subtext="The Image Generation Tool allows the assistant to use DALL-E 3 to generate images. The tool will be used when the user asks the assistant to generate an image."
+                          onChange={() => {
+                            toggleToolInValues(imageGenerationTool.id);
+                          }}
+                        />
+                      )}
+
+                    {customTools.length > 0 && (
+                      <>
+                        {customTools.map((tool) => (
+                          <BooleanFormField
+                            key={tool.id}
+                            name={`enabled_tools_map.${tool.id}`}
+                            label={tool.name}
+                            subtext={tool.description}
+                            onChange={() => {
+                              toggleToolInValues(tool.id);
+                            }}
+                          />
+                        ))}
+                      </>
+                    )}
+                  </>
+                </HidableSection>
+
+                <Divider />
+
+                {llmProviders.length > 0 && (
+                  <>
+                    <HidableSection
+                      sectionTitle="[Advanced] Model Selection"
+                      defaultHidden
+                    >
+                      <>
+                        <Text>
+                          Pick which LLM to use for this Assistant. If left as
+                          Default, will use{" "}
+                          <b className="italic">{defaultModelName}</b>
+                          .
+                          <br />
+                          <br />
+                          For more information on the different LLMs, checkout
+                          the{" "}
+                          <a
+                            href="https://platform.openai.com/docs/models"
+                            target="_blank"
+                            className="text-blue-500"
+                          >
+                            OpenAI docs
+                          </a>
+                          .
+                        </Text>
+
+                        <div className="flex mt-6">
+                          <div className="w-96">
+                            <SubLabel>LLM Provider</SubLabel>
+                            <SelectorFormField
+                              name="llm_model_provider_override"
+                              options={llmProviders.map((llmProvider) => ({
+                                name: llmProvider.name,
+                                value: llmProvider.name,
+                              }))}
+                              includeDefault={true}
+                              onSelect={(selected) => {
+                                if (
+                                  selected !==
+                                  values.llm_model_provider_override
+                                ) {
+                                  setFieldValue(
+                                    "llm_model_version_override",
+                                    null
+                                  );
+                                }
+                                setFieldValue(
+                                  "llm_model_provider_override",
+                                  selected
+                                );
+                              }}
+                            />
+                          </div>
+
+                          {values.llm_model_provider_override && (
+                            <div className="w-96 ml-4">
+                              <SubLabel>Model</SubLabel>
+                              <SelectorFormField
+                                name="llm_model_version_override"
+                                options={
+                                  modelOptionsByProvider.get(
+                                    values.llm_model_provider_override
+                                  ) || []
+                                }
+                                maxHeight="max-h-72"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    </HidableSection>
+
+                    <Divider />
+                  </>
+                )}
+
+                <HidableSection
+                  sectionTitle="[Advanced] Starter Messages"
+                  defaultHidden
                 >
-                  {isUpdate ? "Update!" : "Create!"}
-                </Button>
+                  <>
+                    <div className="mb-4">
+                      <SubLabel>
+                        Starter Messages help guide users to use this Assistant.
+                        They are shown to the user as clickable options when
+                        they select this Assistant. When selected, the specified
+                        message is sent to the LLM as the initial user message.
+                      </SubLabel>
+                    </div>
+
+                    <FieldArray
+                      name="starter_messages"
+                      render={(
+                        arrayHelpers: ArrayHelpers<StarterMessage[]>
+                      ) => (
+                        <div>
+                          {values.starter_messages &&
+                            values.starter_messages.length > 0 &&
+                            values.starter_messages.map((_, index) => {
+                              return (
+                                <div
+                                  key={index}
+                                  className={index === 0 ? "mt-2" : "mt-6"}
+                                >
+                                  <div className="flex">
+                                    <div className="w-full mr-6 border border-border p-3 rounded">
+                                      <div>
+                                        <Label>Name</Label>
+                                        <SubLabel>
+                                          Shows up as the &quot;title&quot; for
+                                          this Starter Message. For example,
+                                          &quot;Write an email&quot;.
+                                        </SubLabel>
+                                        <Field
+                                          name={`starter_messages[${index}].name`}
+                                          className={`
+                                        border 
+                                        border-border 
+                                        bg-background 
+                                        rounded 
+                                        w-full 
+                                        py-2 
+                                        px-3 
+                                        mr-4
+                                      `}
+                                          autoComplete="off"
+                                        />
+                                        <ErrorMessage
+                                          name={`starter_messages[${index}].name`}
+                                          component="div"
+                                          className="text-error text-sm mt-1"
+                                        />
+                                      </div>
+
+                                      <div className="mt-3">
+                                        <Label>Description</Label>
+                                        <SubLabel>
+                                          A description which tells the user
+                                          what they might want to use this
+                                          Starter Message for. For example
+                                          &quot;to a client about a new
+                                          feature&quot;
+                                        </SubLabel>
+                                        <Field
+                                          name={`starter_messages.${index}.description`}
+                                          className={`
+                                        border 
+                                        border-border 
+                                        bg-background 
+                                        rounded 
+                                        w-full 
+                                        py-2 
+                                        px-3 
+                                        mr-4
+                                      `}
+                                          autoComplete="off"
+                                        />
+                                        <ErrorMessage
+                                          name={`starter_messages[${index}].description`}
+                                          component="div"
+                                          className="text-error text-sm mt-1"
+                                        />
+                                      </div>
+
+                                      <div className="mt-3">
+                                        <Label>Message</Label>
+                                        <SubLabel>
+                                          The actual message to be sent as the
+                                          initial user message if a user selects
+                                          this starter prompt. For example,
+                                          &quot;Write me an email to a client
+                                          about a new billing feature we just
+                                          released.&quot;
+                                        </SubLabel>
+                                        <Field
+                                          name={`starter_messages[${index}].message`}
+                                          className={`
+                                        border 
+                                        border-border 
+                                        bg-background 
+                                        rounded 
+                                        w-full 
+                                        py-2 
+                                        px-3 
+                                        mr-4
+                                      `}
+                                          as="textarea"
+                                          autoComplete="off"
+                                        />
+                                        <ErrorMessage
+                                          name={`starter_messages[${index}].message`}
+                                          component="div"
+                                          className="text-error text-sm mt-1"
+                                        />
+                                      </div>
+                                    </div>
+                                    <div className="my-auto">
+                                      <FiX
+                                        className="my-auto w-10 h-10 cursor-pointer hover:bg-hover rounded p-2"
+                                        onClick={() =>
+                                          arrayHelpers.remove(index)
+                                        }
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+
+                          <Button
+                            onClick={() => {
+                              arrayHelpers.push({
+                                name: "",
+                                description: "",
+                                message: "",
+                              });
+                            }}
+                            className="mt-3"
+                            color="green"
+                            size="xs"
+                            type="button"
+                            icon={FiPlus}
+                          >
+                            Add New
+                          </Button>
+                        </div>
+                      )}
+                    />
+                  </>
+                </HidableSection>
+
+                <Divider />
+
+                {EE_ENABLED &&
+                  userGroups &&
+                  (!user || user.role === "admin") && (
+                    <>
+                      <HidableSection sectionTitle="Access">
+                        <>
+                          <BooleanFormField
+                            name="is_public"
+                            label="Is Public?"
+                            subtext="If set, this Assistant will be available to all users. If not, only the specified User Groups will be able to access it."
+                          />
+
+                          {userGroups &&
+                            userGroups.length > 0 &&
+                            !values.is_public && (
+                              <div>
+                                <Text>
+                                  Select which User Groups should have access to
+                                  this Assistant.
+                                </Text>
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                  {userGroups.map((userGroup) => {
+                                    const isSelected = values.groups.includes(
+                                      userGroup.id
+                                    );
+                                    return (
+                                      <Bubble
+                                        key={userGroup.id}
+                                        isSelected={isSelected}
+                                        onClick={() => {
+                                          if (isSelected) {
+                                            setFieldValue(
+                                              "groups",
+                                              values.groups.filter(
+                                                (id) => id !== userGroup.id
+                                              )
+                                            );
+                                          } else {
+                                            setFieldValue("groups", [
+                                              ...values.groups,
+                                              userGroup.id,
+                                            ]);
+                                          }
+                                        }}
+                                      >
+                                        <div className="flex">
+                                          <GroupsIcon />
+                                          <div className="ml-1">
+                                            {userGroup.name}
+                                          </div>
+                                        </div>
+                                      </Bubble>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                        </>
+                      </HidableSection>
+                      <Divider />
+                    </>
+                  )}
+
+                <div className="flex">
+                  <Button
+                    className="mx-auto"
+                    color="green"
+                    size="md"
+                    type="submit"
+                    disabled={isSubmitting}
+                  >
+                    {isUpdate ? "Update!" : "Create!"}
+                  </Button>
+                </div>
               </div>
-            </div>
-          </Form>
-        )}
+            </Form>
+          );
+        }}
       </Formik>
     </div>
   );
