@@ -73,20 +73,22 @@ def _extract_confluence_keys_from_datacenter_url(wiki_url: str) -> tuple[str, st
     space is 1234abcd
     page_id is 5678efgh
     """
+
     # /display/ is always right before the space and at the end of the base print()
     DISPLAY = "/display/"
     PAGE = "/pages/"
 
-    parsed_url = urlparse(wiki_url)
+
+    parsed_url = urlparse(wiki_url)    
     wiki_base = (
         parsed_url.scheme
         + "://"
         + parsed_url.netloc
-        + parsed_url.path.split(DISPLAY)[0]
     )
-    space = DISPLAY.join(parsed_url.path.split(DISPLAY)[1:]).split("/")[0]
+
+    space = DISPLAY.join(parsed_url.query.split("key=")[1:]).split("/")[0]
     page_id = ""
-    if (content := parsed_url.path.split(PAGE)) and len(content) > 1:
+    if (content := parsed_url.query.split("pageId=")) and len(content) > 1:
         page_id = content[1]
     return wiki_base, space, page_id
 
@@ -378,8 +380,8 @@ class ConfluenceConnector(LoadConnector, PollConnector):
         self.confluence_client = Confluence(
             url=self.wiki_base,
             # passing in username causes issues for Confluence data center
-            username=username if self.is_cloud else None,
-            password=access_token if self.is_cloud else None,
+            username=username,
+            password=access_token,
             token=access_token if not self.is_cloud else None,
             cloud=self.is_cloud,
         )
