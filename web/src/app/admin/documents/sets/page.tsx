@@ -27,7 +27,7 @@ import {
   FiAlertTriangle,
   FiCheckCircle,
   FiClock,
-  FiEdit2,
+  FiEdit,
 } from "react-icons/fi";
 import { DeleteButton } from "@/components/DeleteButton";
 import Link from "next/link";
@@ -68,7 +68,7 @@ const EditRow = ({ documentSet }: { documentSet: DocumentSet }) => {
           }
         }}
       >
-        <FiEdit2 className="text-emphasis mr-1 my-auto" />
+        <FiEdit className="text-emphasis mr-1 my-auto" />
         {documentSet.name}
       </div>
     </div>

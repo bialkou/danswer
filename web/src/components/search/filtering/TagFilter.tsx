@@ -2,8 +2,6 @@ import { containsObject, objectsAreEquivalent } from "@/lib/contains";
 import { Tag } from "@/lib/types";
 import { useEffect, useRef, useState } from "react";
 import { FiTag, FiX } from "react-icons/fi";
-import debounce from "lodash/debounce";
-import { getValidTags } from "@/lib/tags/tagUtils";
 
 export function TagFilter({
   tags,
@@ -16,7 +14,6 @@ export function TagFilter({
 }) {
   const [filterValue, setFilterValue] = useState("");
   const [tagOptionsAreVisible, setTagOptionsAreVisible] = useState(false);
-  const [filteredTags, setFilteredTags] = useState<Tag[]>(tags);
   const inputRef = useRef<HTMLInputElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
 
@@ -48,28 +45,14 @@ export function TagFilter({
     };
   }, []);
 
-  const debouncedFetchTags = useRef(
-    debounce(async (value: string) => {
-      if (value) {
-        const fetchedTags = await getValidTags(value);
-        setFilteredTags(fetchedTags);
-      } else {
-        setFilteredTags(tags);
-      }
-    }, 50)
-  ).current;
-
-  useEffect(() => {
-    debouncedFetchTags(filterValue);
-
-    return () => {
-      debouncedFetchTags.cancel();
-    };
-  }, [filterValue, tags, debouncedFetchTags]);
-
-  const handleFilterChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setFilterValue(event.target.value);
-  };
+  const filterValueLower = filterValue.toLowerCase();
+  const filteredTags = filterValueLower
+    ? tags.filter(
+        (tags) =>
+          tags.tag_value.toLowerCase().startsWith(filterValueLower) ||
+          tags.tag_key.toLowerCase().startsWith(filterValueLower)
+      )
+    : tags;
 
   return (
     <div className="relative">
@@ -78,7 +61,7 @@ export function TagFilter({
         className="w-full border border-border py-0.5 px-2 rounded text-sm h-8"
         placeholder="Find a tag"
         value={filterValue}
-        onChange={handleFilterChange}
+        onChange={(event) => setFilterValue(event.target.value)}
         onFocus={() => setTagOptionsAreVisible(true)}
       />
       {selectedTags.length > 0 && (

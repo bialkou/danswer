@@ -6,7 +6,6 @@ from pydantic import BaseModel
 
 from danswer.configs.constants import DocumentSource
 from danswer.configs.constants import INDEX_SEPARATOR
-from danswer.configs.constants import RETURN_SEPARATOR
 from danswer.utils.text_processing import make_url_compatible
 
 
@@ -118,12 +117,7 @@ class DocumentBase(BaseModel):
         # If title is explicitly empty, return a None here for embedding purposes
         if self.title == "":
             return None
-        replace_chars = set(RETURN_SEPARATOR)
-        title = self.semantic_identifier if self.title is None else self.title
-        for char in replace_chars:
-            title = title.replace(char, " ")
-        title = title.strip()
-        return title
+        return self.semantic_identifier if self.title is None else self.title
 
     def get_metadata_str_attributes(self) -> list[str] | None:
         if not self.metadata:

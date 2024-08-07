@@ -22,7 +22,6 @@ import {
   NotionIcon,
   ProductboardIcon,
   RequestTrackerIcon,
-  R2Icon,
   SalesforceIcon,
   SharepointIcon,
   TeamsIcon,
@@ -32,9 +31,6 @@ import {
   ZulipIcon,
   MediaWikiIcon,
   WikipediaIcon,
-  S3Icon,
-  OCIStorageIcon,
-  GoogleStorageIcon,
 } from "@/components/icons/icons";
 import { ValidSources } from "./types";
 import { SourceCategory, SourceMetadata } from "./search/interfaces";
@@ -211,31 +207,6 @@ const SOURCE_METADATA_MAP: SourceMap = {
     displayName: "Clickup",
     category: SourceCategory.AppConnection,
   },
-  s3: {
-    icon: S3Icon,
-    displayName: "S3",
-    category: SourceCategory.AppConnection,
-  },
-  r2: {
-    icon: R2Icon,
-    displayName: "R2",
-    category: SourceCategory.AppConnection,
-  },
-  oci_storage: {
-    icon: OCIStorageIcon,
-    displayName: "Oracle Storage",
-    category: SourceCategory.AppConnection,
-  },
-  google_cloud_storage: {
-    icon: GoogleStorageIcon,
-    displayName: "Google Storage",
-    category: SourceCategory.AppConnection,
-  },
-  not_applicable: {
-    icon: GlobeIcon,
-    displayName: "Internet",
-    category: SourceCategory.ImportedKnowledge,
-  },
 };
 
 function fillSourceMetadata(
@@ -252,21 +223,13 @@ function fillSourceMetadata(
 }
 
 export function getSourceMetadata(sourceType: ValidSources): SourceMetadata {
-  const response = fillSourceMetadata(
-    SOURCE_METADATA_MAP[sourceType],
-    sourceType
-  );
-
-  return response;
+  return fillSourceMetadata(SOURCE_METADATA_MAP[sourceType], sourceType);
 }
 
 export function listSourceMetadata(): SourceMetadata[] {
-  const entries = Object.entries(SOURCE_METADATA_MAP)
-    .filter(([source, _]) => source !== "not_applicable")
-    .map(([source, metadata]) => {
-      return fillSourceMetadata(metadata, source as ValidSources);
-    });
-  return entries;
+  return Object.entries(SOURCE_METADATA_MAP).map(([source, metadata]) => {
+    return fillSourceMetadata(metadata, source as ValidSources);
+  });
 }
 
 export function getSourceDisplayName(sourceType: ValidSources): string | null {

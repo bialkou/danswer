@@ -59,12 +59,7 @@ export type ValidSources =
   | "clickup"
   | "axero"
   | "wikipedia"
-  | "mediawiki"
-  | "s3"
-  | "r2"
-  | "google_cloud_storage"
-  | "oci_storage"
-  | "not_applicable";
+  | "mediawiki";
 
 export type ValidInputTypes = "load_state" | "poll" | "event";
 export type ValidStatuses =
@@ -133,7 +128,6 @@ export interface BookstackConfig {}
 
 export interface ConfluenceConfig {
   wiki_page_url: string;
-  index_origin?: boolean;
 }
 
 export interface JiraConfig {
@@ -224,30 +218,6 @@ export interface GoogleSitesConfig {
 export interface ZendeskConfig {}
 
 export interface DropboxConfig {}
-
-export interface S3Config {
-  bucket_type: "s3";
-  bucket_name: string;
-  prefix: string;
-}
-
-export interface R2Config {
-  bucket_type: "r2";
-  bucket_name: string;
-  prefix: string;
-}
-
-export interface GCSConfig {
-  bucket_type: "google_cloud_storage";
-  bucket_name: string;
-  prefix: string;
-}
-
-export interface OCIConfig {
-  bucket_type: "oci_storage";
-  bucket_name: string;
-  prefix: string;
-}
 
 export interface MediaWikiBaseConfig {
   connector_name: string;
@@ -430,28 +400,6 @@ export interface DropboxCredentialJson {
   dropbox_access_token: string;
 }
 
-export interface R2CredentialJson {
-  account_id: string;
-  r2_access_key_id: string;
-  r2_secret_access_key: string;
-}
-
-export interface S3CredentialJson {
-  aws_access_key_id: string;
-  aws_secret_access_key: string;
-}
-
-export interface GCSCredentialJson {
-  access_key_id: string;
-  secret_access_key: string;
-}
-
-export interface OCICredentialJson {
-  namespace: string;
-  region: string;
-  access_key_id: string;
-  secret_access_key: string;
-}
 export interface SalesforceCredentialJson {
   sf_username: string;
   sf_password: string;
@@ -516,19 +464,6 @@ export interface Tag {
   source: ValidSources;
 }
 
-// STANDARD ANSWERS
-export interface StandardAnswerCategory {
-  id: number;
-  name: string;
-}
-
-export interface StandardAnswer {
-  id: number;
-  keyword: string;
-  answer: string;
-  categories: StandardAnswerCategory[];
-}
-
 // SLACK BOT CONFIGS
 
 export type AnswerFilterOption =
@@ -539,7 +474,7 @@ export interface ChannelConfig {
   channel_names: string[];
   respond_tag_only?: boolean;
   respond_to_bots?: boolean;
-  respond_member_group_list?: string[];
+  respond_team_member_list?: string[];
   answer_filters?: AnswerFilterOption[];
   follow_up_tags?: string[];
 }
@@ -551,8 +486,6 @@ export interface SlackBotConfig {
   persona: Persona | null;
   channel_config: ChannelConfig;
   response_type: SlackBotResponseType;
-  standard_answer_categories: StandardAnswerCategory[];
-  enable_auto_filters: boolean;
 }
 
 export interface SlackBotTokens {

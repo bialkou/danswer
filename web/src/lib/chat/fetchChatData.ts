@@ -13,7 +13,7 @@ import {
 } from "@/lib/types";
 import { ChatSession } from "@/app/chat/interfaces";
 import { Persona } from "@/app/admin/assistants/interfaces";
-import { FullEmbeddingModelResponse } from "@/app/admin/models/embedding/components/types";
+import { FullEmbeddingModelResponse } from "@/app/admin/models/embedding/embeddingModels";
 import { Settings } from "@/app/admin/settings/interfaces";
 import { fetchLLMProvidersSS } from "@/lib/llm/fetchLLMs";
 import { LLMProviderDescriptor } from "@/app/admin/models/llm/interfaces";
@@ -22,7 +22,6 @@ import { personaComparator } from "@/app/admin/assistants/lib";
 import { cookies } from "next/headers";
 import { DOCUMENT_SIDEBAR_WIDTH_COOKIE_NAME } from "@/components/resizable/contants";
 import { hasCompletedWelcomeFlowSS } from "@/components/initialSetup/welcome/WelcomeModalWrapper";
-import { fetchAssistantsSS } from "../assistants/fetchAssistantsSS";
 
 interface FetchChatDataResult {
   user: User | null;
@@ -30,7 +29,7 @@ interface FetchChatDataResult {
   ccPairs: CCPairBasicInfo[];
   availableSources: ValidSources[];
   documentSets: DocumentSet[];
-  assistants: Persona[];
+  personas: Persona[];
   tags: Tag[];
   llmProviders: LLMProviderDescriptor[];
   folders: Folder[];
@@ -49,7 +48,7 @@ export async function fetchChatData(searchParams: {
     getCurrentUserSS(),
     fetchSS("/manage/indexing-status"),
     fetchSS("/manage/document-set"),
-    fetchAssistantsSS(),
+    fetchSS("/persona?include_default=true"),
     fetchSS("/chat/get-user-chat-sessions"),
     fetchSS("/query/valid-tags"),
     fetchLLMProvidersSS(),
@@ -63,7 +62,6 @@ export async function fetchChatData(searchParams: {
     | FullEmbeddingModelResponse
     | Settings
     | LLMProviderDescriptor[]
-    | [Persona[], string | null]
     | null
   )[] = [null, null, null, null, null, null, null, null, null, null];
   try {
@@ -76,10 +74,7 @@ export async function fetchChatData(searchParams: {
   const user = results[1] as User | null;
   const ccPairsResponse = results[2] as Response | null;
   const documentSetsResponse = results[3] as Response | null;
-  const [rawAssistantsList, assistantsFetchError] = results[4] as [
-    Persona[],
-    string | null,
-  ];
+  const personasResponse = results[4] as Response | null;
   const chatSessionsResponse = results[5] as Response | null;
   const tagsResponse = results[6] as Response | null;
   const llmProviders = (results[7] || []) as LLMProviderDescriptor[];
@@ -127,15 +122,17 @@ export async function fetchChatData(searchParams: {
     );
   }
 
-  let assistants = rawAssistantsList;
-  if (assistantsFetchError) {
-    console.log(`Failed to fetch assistants - ${assistantsFetchError}`);
+  let personas: Persona[] = [];
+  if (personasResponse?.ok) {
+    personas = await personasResponse.json();
+  } else {
+    console.log(`Failed to fetch personas - ${personasResponse?.status}`);
   }
   // remove those marked as hidden by an admin
-  assistants = assistants.filter((assistant) => assistant.is_visible);
+  personas = personas.filter((persona) => persona.is_visible);
 
   // sort them in priority order
-  assistants.sort(personaComparator);
+  personas.sort(personaComparator);
 
   let tags: Tag[] = [];
   if (tagsResponse?.ok) {
@@ -171,7 +168,7 @@ export async function fetchChatData(searchParams: {
   // if no connectors are setup, only show personas that are pure
   // passthrough and don't do any retrieval
   if (!hasAnyConnectors) {
-    assistants = assistants.filter((assistant) => assistant.num_chunks === 0);
+    personas = personas.filter((persona) => persona.num_chunks === 0);
   }
 
   let folders: Folder[] = [];
@@ -192,7 +189,7 @@ export async function fetchChatData(searchParams: {
     ccPairs,
     availableSources,
     documentSets,
-    assistants,
+    personas,
     tags,
     llmProviders,
     folders,

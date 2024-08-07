@@ -167,7 +167,7 @@ export function SourceSelector({
   );
 }
 
-export function SelectedBubble({
+function SelectedBubble({
   children,
   onClick,
 }: {

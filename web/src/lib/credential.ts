@@ -31,8 +31,7 @@ export async function deleteCredential<T>(credentialId: number) {
 export function linkCredential(
   connectorId: number,
   credentialId: number,
-  name?: string,
-  isPublic?: boolean
+  name?: string
 ) {
   return fetch(
     `/api/manage/connector/${connectorId}/credential/${credentialId}`,
@@ -41,10 +40,7 @@ export function linkCredential(
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        name: name || null,
-        is_public: isPublic !== undefined ? isPublic : true, // default to public
-      }),
+      body: JSON.stringify({ name: name || null }),
     }
   );
 }

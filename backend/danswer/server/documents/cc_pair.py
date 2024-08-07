@@ -77,15 +77,14 @@ def associate_credential_to_connector(
     connector_id: int,
     credential_id: int,
     metadata: ConnectorCredentialPairMetadata,
-    user: User | None = Depends(current_user),
+    user: User = Depends(current_user),
     db_session: Session = Depends(get_session),
 ) -> StatusResponse[int]:
     try:
         return add_credential_to_connector(
             connector_id=connector_id,
             credential_id=credential_id,
-            cc_pair_name=f"{connector_id}_{credential_id}",
-            is_public=metadata.is_public,
+            cc_pair_name="confluence",
             user=user,
             db_session=db_session,
         )
@@ -97,7 +96,7 @@ def associate_credential_to_connector(
 def dissociate_credential_from_connector(
     connector_id: int,
     credential_id: int,
-    user: User | None = Depends(current_user),
+    user: User = Depends(current_user),
     db_session: Session = Depends(get_session),
 ) -> StatusResponse[int]:
     return remove_credential_from_connector(

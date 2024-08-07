@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useState } from "react";
 import { Formik, Form } from "formik";
 import * as Yup from "yup";
@@ -12,12 +10,10 @@ import {
 } from "@/lib/types";
 import { deleteConnectorIfExistsAndIsUnlinked } from "@/lib/connector";
 import { FormBodyBuilder, RequireAtLeastOne } from "./types";
-import { BooleanFormField, TextFormField } from "./Field";
+import { TextFormField } from "./Field";
 import { createCredential, linkCredential } from "@/lib/credential";
 import { useSWRConfig } from "swr";
-import { Button, Divider } from "@tremor/react";
-import IsPublicField from "./IsPublicField";
-import { usePaidEnterpriseFeaturesEnabled } from "@/components/settings/usePaidEnterpriseFeaturesEnabled";
+import { Button } from "@tremor/react";
 
 const BASE_CONNECTOR_URL = "/api/manage/admin/connector";
 
@@ -27,6 +23,7 @@ export async function submitConnector<T>(
 ): Promise<{ message: string; isSuccess: boolean; response?: Connector<T> }> {
   const isUpdate = connectorId !== undefined;
 
+  let isSuccess = false;
   try {
     const response = await fetch(
       BASE_CONNECTOR_URL + (isUpdate ? `/${connectorId}` : ""),
@@ -40,6 +37,7 @@ export async function submitConnector<T>(
     );
 
     if (response.ok) {
+      isSuccess = true;
       const responseJson = await response.json();
       return { message: "Success!", isSuccess: true, response: responseJson };
     } else {
@@ -66,7 +64,6 @@ interface BaseProps<T extends Yup.AnyObject> {
   formBody?: JSX.Element | null;
   formBodyBuilder?: FormBodyBuilder<T>;
   validationSchema: Yup.ObjectSchema<T>;
-  validate?: (values: T) => Record<string, string>;
   initialValues: T;
   onSubmit?: (
     isSuccess: boolean,
@@ -93,7 +90,6 @@ export function ConnectorForm<T extends Yup.AnyObject>({
   formBody,
   formBodyBuilder,
   validationSchema,
-  validate,
   initialValues,
   refreshFreq,
   pruneFreq,
@@ -103,42 +99,22 @@ export function ConnectorForm<T extends Yup.AnyObject>({
   const { mutate } = useSWRConfig();
   const { popup, setPopup } = usePopup();
 
-  // only show this option for EE, since groups are not supported in CE
-  const showNonPublicOption = usePaidEnterpriseFeaturesEnabled();
-
   const shouldHaveNameInput = credentialId !== undefined && !ccPairNameBuilder;
-
-  const ccPairNameInitialValue = shouldHaveNameInput
-    ? { cc_pair_name: "" }
-    : {};
-  const publicOptionInitialValue = showNonPublicOption
-    ? { is_public: false }
-    : {};
-
-  let finalValidationSchema =
-    validationSchema as Yup.ObjectSchema<Yup.AnyObject>;
-  if (shouldHaveNameInput) {
-    finalValidationSchema = finalValidationSchema.concat(CCPairNameHaver);
-  }
-  if (showNonPublicOption) {
-    finalValidationSchema = finalValidationSchema.concat(
-      Yup.object().shape({
-        is_public: Yup.boolean(),
-      })
-    );
-  }
 
   return (
     <>
       {popup}
       <Formik
-        initialValues={{
-          ...publicOptionInitialValue,
-          ...ccPairNameInitialValue,
-          ...initialValues,
-        }}
-        validationSchema={finalValidationSchema}
-        validate={validate}
+        initialValues={
+          shouldHaveNameInput
+            ? { cc_pair_name: "", ...initialValues }
+            : initialValues
+        }
+        validationSchema={
+          shouldHaveNameInput
+            ? validationSchema.concat(CCPairNameHaver)
+            : validationSchema
+        }
         onSubmit={async (values, formikHelpers) => {
           formikHelpers.setSubmitting(true);
           const connectorName = nameBuilder(values);
@@ -163,6 +139,7 @@ export function ConnectorForm<T extends Yup.AnyObject>({
             });
             return;
           }
+
           const { message, isSuccess, response } = await submitConnector<T>({
             name: connectorName,
             source,
@@ -208,8 +185,7 @@ export function ConnectorForm<T extends Yup.AnyObject>({
             const linkCredentialResponse = await linkCredential(
               response.id,
               credentialIdToLinkTo,
-              ccPairName as string,
-              values.is_public
+              ccPairName
             );
             if (!linkCredentialResponse.ok) {
               const linkCredentialErrorMsg =
@@ -246,13 +222,6 @@ export function ConnectorForm<T extends Yup.AnyObject>({
             )}
             {formBody && formBody}
             {formBodyBuilder && formBodyBuilder(values)}
-            {showNonPublicOption && (
-              <>
-                <Divider />
-                <IsPublicField />
-                <Divider />
-              </>
-            )}
             <div className="flex">
               <Button
                 type="submit"

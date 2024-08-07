@@ -7,12 +7,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { BasicClickable, BasicSelectable } from "@/components/BasicClickable";
 import { ChatSession } from "../interfaces";
-
-import {
-  NEXT_PUBLIC_DO_NOT_USE_TOGGLE_OFF_DANSWER_POWERED,
-  NEXT_PUBLIC_NEW_CHAT_DIRECTS_TO_SAME_PERSONA,
-} from "@/lib/constants";
-
+import { NEXT_PUBLIC_NEW_CHAT_DIRECTS_TO_SAME_PERSONA } from "@/lib/constants";
 import { ChatTab } from "./ChatTab";
 import { Folder } from "../folders/interfaces";
 import { createFolder } from "../folders/FolderManagement";
@@ -21,8 +16,6 @@ import { SettingsContext } from "@/components/settings/SettingsProvider";
 
 import React from "react";
 import { FaBrain } from "react-icons/fa";
-import { Logo } from "@/components/Logo";
-import { HeaderTitle } from "@/components/header/Header";
 
 export const ChatSidebar = ({
   existingChats,
@@ -51,17 +44,14 @@ export const ChatSidebar = ({
     return null;
   }
   const settings = combinedSettings.settings;
-  const enterpriseSettings = combinedSettings.enterpriseSettings;
 
   return (
     <>
       {popup}
       <div
         className={`
-        w-64
-        flex
         flex-none
-        bg-background-weak
+        w-64
         3xl:w-72
         border-r 
         border-border 
@@ -79,23 +69,12 @@ export const ChatSidebar = ({
             }
           >
             <div className="flex w-full">
-              <Logo height={32} width={30} className="mr-1 my-auto" />
-
-              {enterpriseSettings && enterpriseSettings.application_name ? (
-                <div>
-                  <HeaderTitle>
-                    {enterpriseSettings.application_name}
-                  </HeaderTitle>
-
-                  {!NEXT_PUBLIC_DO_NOT_USE_TOGGLE_OFF_DANSWER_POWERED && (
-                    <p className="text-xs text-subtle -mt-1.5">
-                      Powered by Danswer
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <HeaderTitle>Danswer</HeaderTitle>
-              )}
+              <div className="h-[32px] w-[30px]">
+                <Image src="/logo.png" alt="Logo" width="1419" height="1520" />
+              </div>
+              <h1 className="flex text-2xl text-strong font-bold my-auto">
+                Danswer
+              </h1>
             </div>
           </Link>
         </div>
