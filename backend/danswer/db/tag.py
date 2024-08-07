@@ -1,6 +1,5 @@
 from sqlalchemy import delete
 from sqlalchemy import func
-from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -92,10 +91,9 @@ def create_or_add_document_tag_list(
             new_tags.append(new_tag)
             existing_tag_values.add(tag_value)
 
-    if new_tags:
-        logger.debug(
-            f"Created new tags: {', '.join([f'{tag.tag_key}:{tag.tag_value}' for tag in new_tags])}"
-        )
+    logger.debug(
+        f"Created new tags: {', '.join([f'{tag.tag_key}:{tag.tag_value}' for tag in new_tags])}"
+    )
 
     all_tags = existing_tags + new_tags
 
@@ -108,27 +106,17 @@ def create_or_add_document_tag_list(
 
 
 def get_tags_by_value_prefix_for_source_types(
-    tag_key_prefix: str | None,
     tag_value_prefix: str | None,
     sources: list[DocumentSource] | None,
-    limit: int | None,
     db_session: Session,
 ) -> list[Tag]:
     query = select(Tag)
 
-    if tag_key_prefix or tag_value_prefix:
-        conditions = []
-        if tag_key_prefix:
-            conditions.append(Tag.tag_key.ilike(f"{tag_key_prefix}%"))
-        if tag_value_prefix:
-            conditions.append(Tag.tag_value.ilike(f"{tag_value_prefix}%"))
-        query = query.where(or_(*conditions))
+    if tag_value_prefix:
+        query = query.where(Tag.tag_value.startswith(tag_value_prefix))
 
     if sources:
         query = query.where(Tag.source.in_(sources))
-
-    if limit:
-        query = query.limit(limit)
 
     result = db_session.execute(query)
 

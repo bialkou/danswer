@@ -98,7 +98,7 @@ export default function Web() {
                       name: "Sitemap",
                       value: "sitemap",
                       description:
-                        "Enter the sitemap url or the root of the site which we can scan for a sitemap",
+                        "Assumes the URL to Index points to a Sitemap. Will try and index all pages that are a mentioned in the sitemap.",
                     },
                   ]}
                 />

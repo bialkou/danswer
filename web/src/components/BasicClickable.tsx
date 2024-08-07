@@ -20,9 +20,8 @@ export function BasicClickable({
         text-sm
         p-1
         h-full
-        bg-background
         select-none
-        hover:bg-hover-light
+        hover:bg-hover
         ${fullWidth ? "w-full" : ""}`}
     >
       {children}
@@ -66,13 +65,11 @@ export function BasicSelectable({
   selected,
   hasBorder,
   fullWidth = false,
-  padding = true,
 }: {
   children: string | JSX.Element;
   selected: boolean;
   hasBorder?: boolean;
   fullWidth?: boolean;
-  padding?: boolean;
 }) {
   return (
     <div
@@ -81,7 +78,7 @@ export function BasicSelectable({
         font-medium 
         text-emphasis 
         text-sm
-        ${padding && "p-1"}
+        p-1
         select-none
         ${hasBorder ? "border border-border" : ""}
         ${selected ? "bg-hover" : "hover:bg-hover"}

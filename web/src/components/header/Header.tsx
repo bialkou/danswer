@@ -1,18 +1,16 @@
 "use client";
 
 import { User } from "@/lib/types";
+import { logout } from "@/lib/user";
+import Image from "next/image";
 import Link from "next/link";
-import React, { useContext } from "react";
+import { useRouter } from "next/navigation";
+import React, { useContext, useEffect, useRef, useState } from "react";
+import { CustomDropdown, DefaultDropdownElement } from "../Dropdown";
 import { FiMessageSquare, FiSearch } from "react-icons/fi";
 import { HeaderWrapper } from "./HeaderWrapper";
 import { SettingsContext } from "../settings/SettingsProvider";
 import { UserDropdown } from "../UserDropdown";
-import { Logo } from "../Logo";
-import { NEXT_PUBLIC_DO_NOT_USE_TOGGLE_OFF_DANSWER_POWERED } from "@/lib/constants";
-
-export function HeaderTitle({ children }: { children: JSX.Element | string }) {
-  return <h1 className="flex text-2xl text-strong font-bold">{children}</h1>;
-}
 
 interface HeaderProps {
   user: User | null;
@@ -24,37 +22,23 @@ export function Header({ user }: HeaderProps) {
     return null;
   }
   const settings = combinedSettings.settings;
-  const enterpriseSettings = combinedSettings.enterpriseSettings;
 
   return (
     <HeaderWrapper>
       <div className="flex h-full">
         <Link
-          className="py-3 flex flex-col"
+          className="py-4"
           href={
             settings && settings.default_page === "chat" ? "/chat" : "/search"
           }
         >
-          <div className="flex my-auto">
-            <div className="mr-1 my-auto">
-              <Logo />
+          <div className="flex">
+            <div className="h-[32px] w-[30px]">
+              <Image src="/logo.png" alt="Logo" width="1419" height="1520" />
             </div>
-            <div className="my-auto">
-              {enterpriseSettings && enterpriseSettings.application_name ? (
-                <div>
-                  <HeaderTitle>
-                    {enterpriseSettings.application_name}
-                  </HeaderTitle>
-                  {!NEXT_PUBLIC_DO_NOT_USE_TOGGLE_OFF_DANSWER_POWERED && (
-                    <p className="text-xs text-subtle -mt-1.5">
-                      Powered by Danswer
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <HeaderTitle>Danswer</HeaderTitle>
-              )}
-            </div>
+            <h1 className="flex text-2xl text-strong font-bold my-auto">
+              Danswer
+            </h1>
           </div>
         </Link>
 

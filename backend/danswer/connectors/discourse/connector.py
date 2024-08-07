@@ -101,11 +101,7 @@ class DiscourseConnector(PollConnector):
             if end and end < last_time_dt:
                 continue
 
-            if (
-                self.categories
-                and valid_categories
-                and topic.get("category_id") not in valid_categories
-            ):
+            if valid_categories and topic.get("category_id") not in valid_categories:
                 continue
 
             topic_ids.append(topic["id"])
@@ -142,16 +138,10 @@ class DiscourseConnector(PollConnector):
             sections.append(
                 Section(link=topic_url, text=parse_html_page_basic(post["cooked"]))
             )
-        category_name = self.category_id_map.get(topic["category_id"])
 
-        metadata: dict[str, str | list[str]] = (
-            {
-                "category": category_name,
-            }
-            if category_name
-            else {}
-        )
-
+        metadata: dict[str, str | list[str]] = {
+            "category": self.category_id_map[topic["category_id"]],
+        }
         if topic.get("tags"):
             metadata["tags"] = topic["tags"]
 

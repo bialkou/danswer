@@ -5,10 +5,8 @@ from typing import IO
 
 import bs4
 
-from danswer.configs.app_configs import HTML_BASED_CONNECTOR_TRANSFORM_LINKS_STRATEGY
 from danswer.configs.app_configs import WEB_CONNECTOR_IGNORED_CLASSES
 from danswer.configs.app_configs import WEB_CONNECTOR_IGNORED_ELEMENTS
-from danswer.file_processing.enums import HtmlBasedConnectorTransformLinksStrategy
 
 MINTLIFY_UNWANTED = ["sticky", "hidden"]
 
@@ -34,19 +32,6 @@ def strip_newlines(document: str) -> str:
     return re.sub(r"[\n\r]+", " ", document)
 
 
-def format_element_text(element_text: str, link_href: str | None) -> str:
-    element_text_no_newlines = strip_newlines(element_text)
-
-    if (
-        not link_href
-        or HTML_BASED_CONNECTOR_TRANSFORM_LINKS_STRATEGY
-        == HtmlBasedConnectorTransformLinksStrategy.STRIP
-    ):
-        return element_text_no_newlines
-
-    return f"[{element_text_no_newlines}]({link_href})"
-
-
 def format_document_soup(
     document: bs4.BeautifulSoup, table_cell_separator: str = "\t"
 ) -> str:
@@ -64,8 +49,6 @@ def format_document_soup(
     verbatim_output = 0
     in_table = False
     last_added_newline = False
-    link_href: str | None = None
-
     for e in document.descendants:
         verbatim_output -= 1
         if isinstance(e, bs4.element.NavigableString):
@@ -88,7 +71,7 @@ def format_document_soup(
                 content_to_add = (
                     element_text
                     if verbatim_output > 0
-                    else format_element_text(element_text, link_href)
+                    else strip_newlines(element_text)
                 )
 
                 # Don't join separate elements without any spacing
@@ -115,14 +98,7 @@ def format_document_soup(
             elif in_table:
                 # don't handle other cases while in table
                 pass
-            elif e.name == "a":
-                href_value = e.get("href", None)
-                # mostly for typing, having multiple hrefs is not valid HTML
-                link_href = (
-                    href_value[0] if isinstance(href_value, list) else href_value
-                )
-            elif e.name == "/a":
-                link_href = None
+
             elif e.name in ["p", "div"]:
                 if not list_element_start:
                     text += "\n"

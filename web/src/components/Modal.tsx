@@ -1,9 +1,7 @@
 import { Divider } from "@tremor/react";
 import { FiX } from "react-icons/fi";
-import { IconProps } from "./icons/icons";
 
 interface ModalProps {
-  icon?: ({ size, className }: IconProps) => JSX.Element;
   children: JSX.Element | string;
   title?: JSX.Element | string;
   onOutsideClick?: () => void;
@@ -15,7 +13,6 @@ interface ModalProps {
 }
 
 export function Modal({
-  icon,
   children,
   title,
   onOutsideClick,
@@ -47,15 +44,10 @@ export function Modal({
             <>
               <div className="flex mb-4">
                 <h2
-                  className={
-                    "my-auto flex content-start gap-x-4 font-bold " +
-                    (titleSize || "text-2xl")
-                  }
+                  className={"my-auto font-bold " + (titleSize || "text-2xl")}
                 >
                   {title}
-                  {icon && icon({ size: 30 })}
                 </h2>
-
                 {onOutsideClick && (
                   <div
                     onClick={onOutsideClick}

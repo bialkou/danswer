@@ -34,7 +34,6 @@ export interface FullLLMProvider extends LLMProvider {
   id: number;
   is_default_provider: boolean | null;
   model_names: string[];
-  icon?: React.FC<{ size?: number; className?: string }>;
 }
 
 export interface LLMProviderDescriptor {

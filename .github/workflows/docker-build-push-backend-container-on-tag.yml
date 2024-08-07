@@ -5,14 +5,9 @@ on:
     tags:
       - '*'
 
-env:
-  REGISTRY_IMAGE: danswer/danswer-backend
-
 jobs:
   build-and-push:
-    # TODO: make this a matrix build like the web containers
-    runs-on: 
-      group: amd64-image-builders
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
@@ -35,8 +30,8 @@ jobs:
         platforms: linux/amd64,linux/arm64
         push: true
         tags: |
-          ${{ env.REGISTRY_IMAGE }}:${{ github.ref_name }}
-          ${{ env.REGISTRY_IMAGE }}:latest
+          danswer/danswer-backend:${{ github.ref_name }}
+          danswer/danswer-backend:latest
         build-args: |
           DANSWER_VERSION=${{ github.ref_name }}
 
@@ -44,6 +39,6 @@ jobs:
       uses: aquasecurity/trivy-action@master
       with:
         # To run locally: trivy image --severity HIGH,CRITICAL danswer/danswer-backend
-        image-ref: docker.io/${{ env.REGISTRY_IMAGE }}:${{ github.ref_name }}
+        image-ref: docker.io/danswer/danswer-backend:${{ github.ref_name }}
         severity: 'CRITICAL,HIGH'
         trivyignores: ./backend/.trivyignore

@@ -4,7 +4,7 @@ import { User } from "@/lib/types";
 import { Text } from "@tremor/react";
 import Link from "next/link";
 import { FaRobot } from "react-icons/fa";
-import { FiEdit2 } from "react-icons/fi";
+import { FiEdit } from "react-icons/fi";
 
 function AssistantDisplay({
   persona,
@@ -34,7 +34,7 @@ function AssistantDisplay({
       {isEditable && (
         <div className="pl-2 my-auto">
           <Link href={`/assistants/edit/${persona.id}`}>
-            <FiEdit2
+            <FiEdit
               className="my-auto ml-auto hover:bg-hover p-0.5"
               size={20}
             />

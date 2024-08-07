@@ -180,7 +180,6 @@ def get_persona(
             persona_id=persona_id,
             user=user,
             db_session=db_session,
-            is_for_edit=False,
         )
     )
 

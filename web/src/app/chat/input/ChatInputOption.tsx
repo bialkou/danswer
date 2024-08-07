@@ -8,9 +8,7 @@ interface ChatInputOptionProps {
   icon: IconType;
   onClick: () => void;
   size?: number;
-
   options?: { name: string; value: number; onClick?: () => void }[];
-  flexPriority?: "shrink" | "stiff" | "second";
 }
 
 const ChatInputOption = ({
@@ -19,7 +17,6 @@ const ChatInputOption = ({
   onClick,
   size = 16,
   options,
-  flexPriority,
 }: ChatInputOptionProps) => {
   const [isDropupVisible, setDropupVisible] = useState(false);
 
@@ -73,25 +70,14 @@ const ChatInputOption = ({
         onClick={handleClick}
         title={name}
       >
-        <Icon size={size} className="flex-none" />
-        <span className="text-sm break-all line-clamp-1">{name}</span>
+        <Icon size={size} />
+        <span className="text-sm">{name}</span>
       </div>
     </div>
   );
 
   if (!dropdownContent) {
-    return (
-      <div
-        onClick={onClick}
-        className={`text-ellipsis
-          ${flexPriority == "shrink" && "flex-shrink-[10000] flex-grow-0 flex-basis-auto min-w-[30px] whitespace-nowrap overflow-hidden"}
-          ${flexPriority == "second" && "flex-shrink flex-basis-0 min-w-[30px] whitespace-nowrap overflow-hidden"}
-          ${flexPriority == "stiff" && "flex-none whitespace-nowrap overflow-hidden"}
-          `}
-      >
-        {option}
-      </div>
-    );
+    return <div onClick={onClick}>{option}</div>;
   }
 
   return (

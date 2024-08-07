@@ -3,29 +3,14 @@ import { CPUIcon } from "@/components/icons/icons";
 import { SlackBotCreationForm } from "../SlackBotConfigCreationForm";
 import { fetchSS } from "@/lib/utilsSS";
 import { ErrorCallout } from "@/components/ErrorCallout";
-import { DocumentSet, StandardAnswerCategory } from "@/lib/types";
+import { DocumentSet } from "@/lib/types";
 import { BackButton } from "@/components/BackButton";
 import { Text } from "@tremor/react";
-import {
-  FetchAssistantsResponse,
-  fetchAssistantsSS,
-} from "@/lib/assistants/fetchAssistantsSS";
+import { Persona } from "../../assistants/interfaces";
 
 async function Page() {
-  const tasks = [
-    fetchSS("/manage/document-set"),
-    fetchAssistantsSS(),
-    fetchSS("/manage/admin/standard-answer/category"),
-  ];
-  const [
-    documentSetsResponse,
-    [assistants, assistantsFetchError],
-    standardAnswerCategoriesResponse,
-  ] = (await Promise.all(tasks)) as [
-    Response,
-    FetchAssistantsResponse,
-    Response,
-  ];
+  const tasks = [fetchSS("/manage/document-set"), fetchSS("/persona")];
+  const [documentSetsResponse, personasResponse] = await Promise.all(tasks);
 
   if (!documentSetsResponse.ok) {
     return (
@@ -37,26 +22,15 @@ async function Page() {
   }
   const documentSets = (await documentSetsResponse.json()) as DocumentSet[];
 
-  if (assistantsFetchError) {
+  if (!personasResponse.ok) {
     return (
       <ErrorCallout
         errorTitle="Something went wrong :("
-        errorMsg={`Failed to fetch assistants - ${assistantsFetchError}`}
+        errorMsg={`Failed to fetch personas - ${await personasResponse.text()}`}
       />
     );
   }
-
-  if (!standardAnswerCategoriesResponse.ok) {
-    return (
-      <ErrorCallout
-        errorTitle="Something went wrong :("
-        errorMsg={`Failed to fetch standard answer categories - ${await standardAnswerCategoriesResponse.text()}`}
-      />
-    );
-  }
-
-  const standardAnswerCategories =
-    (await standardAnswerCategoriesResponse.json()) as StandardAnswerCategory[];
+  const personas = (await personasResponse.json()) as Persona[];
 
   return (
     <div className="container mx-auto">
@@ -71,11 +45,7 @@ async function Page() {
         DanswerBot behaves in the specified channels.
       </Text>
 
-      <SlackBotCreationForm
-        documentSets={documentSets}
-        personas={assistants}
-        standardAnswerCategories={standardAnswerCategories}
-      />
+      <SlackBotCreationForm documentSets={documentSets} personas={personas} />
     </div>
   );
 }

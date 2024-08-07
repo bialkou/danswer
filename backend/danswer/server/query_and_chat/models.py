@@ -32,12 +32,6 @@ class SimpleQueryRequest(BaseModel):
     query: str
 
 
-class UpdateChatSessionThreadRequest(BaseModel):
-    # If not specified, use Danswer default persona
-    chat_session_id: int
-    new_alternate_model: str
-
-
 class ChatSessionCreationRequest(BaseModel):
     # If not specified, use Danswer default persona
     persona_id: int = 0
@@ -107,9 +101,6 @@ class CreateChatMessageRequest(ChunkContext):
     llm_override: LLMOverride | None = None
     prompt_override: PromptOverride | None = None
 
-    # allow user to specify an alternate assistnat
-    alternate_assistant_id: int | None = None
-
     # used for seeded chats to kick off the generation of an AI answer
     use_existing_user_message: bool = False
 
@@ -151,7 +142,6 @@ class ChatSessionDetails(BaseModel):
     time_created: str
     shared_status: ChatSessionSharedStatus
     folder_id: int | None
-    current_alternate_model: str | None = None
 
 
 class ChatSessionsResponse(BaseModel):
@@ -184,7 +174,6 @@ class ChatMessageDetail(BaseModel):
     context_docs: RetrievalDocs | None
     message_type: MessageType
     time_sent: datetime
-    alternate_assistant_id: str | None
     # Dict mapping citation number to db_doc_id
     citations: dict[int, int] | None
     files: list[FileDescriptor]
@@ -204,7 +193,6 @@ class ChatSessionDetailResponse(BaseModel):
     messages: list[ChatMessageDetail]
     time_created: datetime
     shared_status: ChatSessionSharedStatus
-    current_alternate_model: str | None
 
 
 class QueryValidationResponse(BaseModel):

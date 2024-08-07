@@ -53,7 +53,6 @@ export interface ChatSession {
   time_created: string;
   shared_status: ChatSessionSharedStatus;
   folder_id: number | null;
-  current_alternate_model: string;
 }
 
 export interface Message {
@@ -70,7 +69,6 @@ export interface Message {
   parentMessageId: number | null;
   childrenMessageIds?: number[];
   latestChildMessageId?: number | null;
-  alternateAssistantID?: number | null;
 }
 
 export interface BackendChatSession {
@@ -81,7 +79,6 @@ export interface BackendChatSession {
   messages: BackendMessage[];
   time_created: string;
   shared_status: ChatSessionSharedStatus;
-  current_alternate_model?: string;
 }
 
 export interface BackendMessage {
@@ -96,7 +93,6 @@ export interface BackendMessage {
   citations: CitationMap;
   files: FileDescriptor[];
   tool_calls: ToolCallFinalResult[];
-  alternate_assistant_id?: number | null;
 }
 
 export interface DocumentsResponse {

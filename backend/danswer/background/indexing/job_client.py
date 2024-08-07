@@ -105,9 +105,7 @@ class SimpleJobClient:
         """NOTE: `pure` arg is needed so this can be a drop in replacement for Dask"""
         self._cleanup_completed_jobs()
         if len(self.jobs) >= self.n_workers:
-            logger.debug(
-                f"No available workers to run job. Currently running '{len(self.jobs)}' jobs, with a limit of '{self.n_workers}'."
-            )
+            logger.debug("No available workers to run job")
             return None
 
         job_id = self.job_id_counter
