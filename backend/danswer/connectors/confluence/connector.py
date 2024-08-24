@@ -75,7 +75,7 @@ def _extract_confluence_keys_from_datacenter_url(wiki_url: str) -> tuple[str, st
     page_id is 5678efgh
     """
     # /display/ is always right before the space and at the end of the base print()
-    DISPLAY = "/display/"
+    DISPLAY = "/spaces/"
 
     parsed_url = urlparse(wiki_url)
     wiki_base = (
