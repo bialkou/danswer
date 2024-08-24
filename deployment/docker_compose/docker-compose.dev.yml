@@ -5,6 +5,7 @@ services:
     build:
       context: ../../backend
       dockerfile: Dockerfile
+      network: host
     command: >
       /bin/sh -c "alembic upgrade head &&
       echo \"Starting Danswer Api Server\" &&
@@ -110,6 +111,7 @@ services:
     build:
       context: ../../backend
       dockerfile: Dockerfile
+      network: host
     command: /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
     depends_on:
       - relational_db
@@ -211,6 +213,7 @@ services:
     build:
       context: ../../web
       dockerfile: Dockerfile
+      network: host
       args:
         - NEXT_PUBLIC_DISABLE_STREAMING=${NEXT_PUBLIC_DISABLE_STREAMING:-false}
         - NEXT_PUBLIC_NEW_CHAT_DIRECTS_TO_SAME_PERSONA=${NEXT_PUBLIC_NEW_CHAT_DIRECTS_TO_SAME_PERSONA:-false}
@@ -240,6 +243,7 @@ services:
     build:
       context: ../../backend
       dockerfile: Dockerfile.model_server
+      network: host
     command: >
       /bin/sh -c "if [ \"${DISABLE_MODEL_SERVER:-false}\" = \"True\" ]; then
         echo 'Skipping service...';
@@ -266,6 +270,7 @@ services:
     build:
       context: ../../backend
       dockerfile: Dockerfile.model_server
+      network: host
     command: >
       /bin/sh -c "if [ \"${DISABLE_MODEL_SERVER:-false}\" = \"True\" ]; then
         echo 'Skipping service...';
