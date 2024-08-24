@@ -76,7 +76,7 @@ Tokenizer.from_pretrained('intfloat/multilingual-e5-base');"
 
 # Pre-downloading NLTK for setups with limited egress
 RUN python -m nltk.downloader stopwords
-RUN python -m nltk.downloader wordnet
+RUN python -m nltk.downloader wordnet && unzip /root/nltk_data/corpora/wordnet.zip -d /root/nltk_data/corpora/
 RUN python -m nltk.downloader punkt
 
 # Set up application files
