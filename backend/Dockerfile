@@ -69,7 +69,9 @@ RUN apt-get update && \
 
 # Pre-downloading models for setups with limited egress
 RUN python -c "from tokenizers import Tokenizer; \
-Tokenizer.from_pretrained('nomic-ai/nomic-embed-text-v1')"
+Tokenizer.from_pretrained('nomic-ai/nomic-embed-text-v1'); \
+Tokenizer.from_pretrained('intfloat/multilingual-e5-small'); \
+Tokenizer.from_pretrained('intfloat/multilingual-e5-base');"
 
 
 # Pre-downloading NLTK for setups with limited egress

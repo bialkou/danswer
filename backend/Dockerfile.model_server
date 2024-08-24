@@ -36,11 +36,6 @@ snapshot_download('danswer/intent-model'); \
 snapshot_download('intfloat/e5-base-v2'); \
 snapshot_download('intfloat/multilingual-e5-base'); \
 snapshot_download('intfloat/multilingual-e5-small'); \
-from tokenizers import Tokenizer; \
-Tokenizer.from_pretrained('nomic-ai/nomic-embed-text-v1'); \
-Tokenizer.from_pretrained('nomic-ai/nomic-embed-text-v1'); \
-Tokenizer.from_pretrained('intfloat/multilingual-e5-small'); \
-Tokenizer.from_pretrained('intfloat/multilingual-e5-base'); \
 from sentence_transformers import SentenceTransformer; \
 SentenceTransformer(model_name_or_path='nomic-ai/nomic-embed-text-v1', trust_remote_code=True); \
 SentenceTransformer(model_name_or_path='nomic-ai/nomic-embed-text-v1', trust_remote_code=True); \
