@@ -75,10 +75,9 @@ Tokenizer.from_pretrained('intfloat/multilingual-e5-base');"
 
 
 # Pre-downloading NLTK for setups with limited egress
-RUN python -c "import nltk; \
-nltk.download('stopwords', quiet=True); \
-nltk.download('wordnet', quiet=True); \
-nltk.download('punkt', quiet=True);"
+RUN python -m nltk.downloader stopwords
+RUN python -m nltk.downloader wordnet
+RUN python -m nltk.downloader punkt
 
 # Set up application files
 WORKDIR /app
