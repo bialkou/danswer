@@ -28,8 +28,6 @@ AutoTokenizer.from_pretrained('danswer/intent-model'); \
 AutoTokenizer.from_pretrained('intfloat/e5-base-v2'); \
 AutoTokenizer.from_pretrained('intfloat/multilingual-e5-base'); \
 AutoTokenizer.from_pretrained('intfloat/multilingual-e5-small'); \
-from transformers import TFDistilBertForSequenceClassification; \
-TFDistilBertForSequenceClassification.from_pretrained('danswer/intent-model'); \
 from huggingface_hub import snapshot_download; \
 snapshot_download(repo_id='danswer/hybrid-intent-token-classifier', revision='v1.0.3'); \
 snapshot_download('nomic-ai/nomic-embed-text-v1'); \
