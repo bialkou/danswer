@@ -214,8 +214,7 @@ def get_embedding_model(
         # be fairly arbitrary so only use trusted models
         model = SentenceTransformer(
             model_name_or_path=model_name,
-            trust_remote_code=True,
-            local_files_only=True
+            trust_remote_code=True
         )
         model.max_seq_length = max_context_length
         _GLOBAL_MODELS_DICT[model_name] = model
