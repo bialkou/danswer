@@ -249,7 +249,7 @@ class RecursiveIndexer:
     def get_pages(self, ind: int, size: int) -> list[dict]:
         if ind * size > len(self.pages):
             return []
-        return self.pages[ind * size : (ind + 1) * size]
+        return self.pages[ind * size: (ind + 1) * size]
 
     def _fetch_origin_page(
         self,
@@ -743,7 +743,7 @@ class ConfluenceConnector(LoadConnector, PollConnector):
             if attachment_content is None:
                 continue
 
-            creator_email = attachment["history"]["createdBy"]["email"]
+            creator_email = attachment.get("history", {"createdBy": {"email": None}}).get("createdBy").get("email")
 
             comment = attachment["metadata"].get("comment", "")
             doc_metadata: dict[str, str | list[str]] = {"comment": comment}
