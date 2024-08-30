@@ -176,7 +176,7 @@ export function ChatPage({
             tool.in_code_tool_id === "InternetSearchTool"
         )
       ? 0
-      : 0.7;
+      : 0;
 
   const setSelectedAssistantFromId = (assistantId: number) => {
     // NOTE: also intentionally look through available assistants here, so that
